@@ -1,0 +1,60 @@
+[tool.ruff]
+line-length = 120
+
+lint.select = [
+  "E",   # pycodestyle
+  "W",
+  "F",   # pyflakes
+  "UP",  # pyupgrade
+  "N",
+  "D",
+  "PL"
+]
+
+target-version = "py311"
+
+lint.ignore = [
+"D100",
+"D102",
+"D103",
+"D104",
+"D106",
+"D107",
+"D212",
+"D205",
+"D415",
+"PLR2004",
+"UP037"
+]
+
+# Force exclude is required to exclude even if a file is passed to ruff (this is how the GH Action does)
+force-exclude = true
+extend-exclude = [
+  "**/migrations/*.py",
+  "**/tests/*.py",
+  "env",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+section-order = ["future", "standard-library", "third-party", "first-party", "footprint", "local-folder"]
+
+[tool.ruff.lint.isort.sections]
+footprint = ["footprint_app", "footprint_django"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 20
+
+[tool.ruff.format]
+quote-style = "single"
+
+[testenv]
+deps = ["pytest", "pytest-cov"]
+commands = ["coverage run -m pytest", "coverage xml"]
+
+[coverage.run]
+relative_files = true
+source = "back/"
+branch = true
