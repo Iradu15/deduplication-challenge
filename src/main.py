@@ -1,406 +1,143 @@
-from enum import Enum
+from settings import (
+    MERGE_BY_COMPLETING,
+    MERGE_BY_LENGTHIEST_VALUE,
+    MERGE_BY_MIN_VALUE,
+    SAMPLE_FILE_PATH,
+    COLUMNS,
+    MERGE_BY_MOST_FREQUENT,
+    MERGE_BY_LEAST_FREQUENT,
+    OUTPUT_FILE,
+)
+from controller import Controller
 from typing import Any
-import numpy as np
+from collections.abc import Hashable
 import pandas as pd
+from collections import defaultdict
 
-FILE_PATH = 'db.snappy.parquet'
-
-
-class COLUMNS(Enum):
-    """All columns / features of a product from the sample dataset"""
-
-    UNSPSC = 'unspsc'
-    ROOT_DOMAIN = 'root_domain'
-    PAGE_URL = 'page_url'
-    PRODUCT_TITLE = 'product_title'
-    PRODUCT_SUMMARY = 'product_summary'
-    PRODUCT_NAME = 'product_name'
-    PRODUCT_IDENTIFIER = 'product_identifier'
-    BRAND = 'brand'
-    INTENDED_INDUSTRIES = 'intended_industries'
-    APPLICABILITY = 'applicability'
-    ECO_FRIENDLY = 'eco_friendly'
-    ETHICAL_AND_SUSTAINABILITY_PRACTICES = 'ethical_and_sustainability_practices'
-    PRODUCTION_CAPACITY = 'production_capacity'
-    PRICE = 'price'
-    MATERIALS = 'materials'
-    INGREDIENTS = 'ingredients'
-    MANUFACTURING_COUNTRIES = 'manufacturing_countries'
-    MANUFACTURING_YEAR = 'manufacturing_year'
-    MANUFACTURING_TYPE = 'manufacturing_type'
-    CUSTOMIZATION = 'customization'
-    PACKAGING_TYPE = 'packaging_type'
-    FORM = 'form'
-    SIZE = 'size'
-    COLOR = 'color'
-    PURITY = 'purity'
-    ENERGY_EFFICIENCY = 'energy_efficiency'
-    PRESSURE_RATING = 'pressure_rating'
-    POWER_RATING = 'power_rating'
-    QUALITY_STANDARDS_AND_CERTIFICATIONS = 'quality_standards_and_certifications'
-    MISCELLANEOUS_FEATURES = 'miscellaneous_features'
-    DESCRIPTION = 'description'
+import sys
 
 
-class Utils:
-    """Methods used once."""
+def merge_group(df: dict[Hashable, Any], products_id: list[int], frequencies: dict[str, dict[str, int]]) -> None:
+    """
+    Deduplicate a group of products with the same product_identifier
+    Remove the incomplete duplicates and add the merged complete product
+    """
+    deduplicated_product = {}
 
-    duplicate_product_identifiers = [
-        'Part_Number: 53085',
-        'UPC: 705591320215',
-        'Part_Number: D966495',
-        'Part_Number: DMT206',
-        'UPC: 705591195950',
-        'SKU: 1783FXDMIDL',
-        'SKU: 109139',
-        'SKU: Not Available',
-        'Part_Number: F1200BT',
-        'Part_Number: REU-OADA-C16Z10-B770',
-        'SKU: CMP-CNVRT-HDMI2VGA-WHT-KIT',
-        'Part_Number: F400B4F',
-        'Part_Number: F3200S',
-        'Part_Number: D966555',
-        'Part_Number: F400S4T-V',
-        'Part_Number: 52943',
-        'Part_Number: F400B4',
-        'Part_Number: 52940',
-        'Part_Number: 8784-06',
-        'Part_Number: F400BT',
-        'Part_Number: LAG14112',
-        'UPC: 123456789',
-        'Part_Number: F600SF',
-        'Part_Number: 56000',
-        'Part_Number: F400BT-V',
-        'Part_Number: 30440',
-        'Part_Number: F400B4-V',
-        'Part_Number: F1200B',
-        'Part_Number: 32767',
-        'CAS: 793-24-8',
-        'SKU: 1783SUDCOMK',
-        'Part_Number: F400B-V',
-        'Part_Number: 52170',
-        'Part_Number: HP108',
-        'Part_Number: IHB21K6',
-        'Part_Number: ZKAD-C3M',
-        'SKU: BNDL-V0000-2X',
-        'Part_Number: MO31/10',
-        'Part_Number: F600BT-V',
-        'Part_Number: CFP25G/AE25G/X',
-        'NSN: 5360-01-312-9909',
-        'Part_Number: BSBHHRP-125',
-        'Part_Number: IS410',
-        'Part_Number: F1600B',
-        'Part_Number: 69622',
-        'Part_Number: 0986435505',
-        'Part_Number: F600B4F-V',
-        'Part_Number: 53007',
-        'Part_Number: CMP15G/AE15G/CFP15G',
-        'Part_Number: D966615',
-        'Part_Number: F400B4F-V',
-        'Part_Number: 40350',
-        'Part_Number: F600S4',
-        'Part_Number: 40149',
-        'Part_Number: F400B',
-        'Part_Number: 70154BKXS',
-        'Part_Number: D966525',
-        'SKU: WP1540AW',
-        'Part_Number: D966515',
-        'Part_Number: FJ2150_NAVY',
-        'Part_Number: 90155',
-        'Part_Number: MO31/30',
-        'Product_Code: B07H9H6SPN',
-        'Part_Number: F600B-V',
-        'UPC: 705591195868',
-        'Part_Number: REU-01075',
-        'SKU: 34246',
-        'Part_Number: F400B4T',
-        'Product_Code: BLD7714-SM',
-        'Part_Number: 58773',
-        'Product_Code: HT-B8110',
-        'CAS: 137-26-8',
-        'Part_Number: 66500',
-        'SKU: 1783TSYBLD',
-        'Product_Code: IHB21K6',
-        'Part_Number: REU-98707-2346',
-        'Part_Number: F600S4F',
-        'Part_Number: F400B-F',
-        'SKU: 113129',
-        'Part_Number: 29790',
-        'Part_Number: 8320BGP',
-        'Part_Number: F400SS4',
-        'Part_Number: 95848',
-        'Part_Number: 7602BKPMED',
-        'Part_Number: F600S',
-        'Part_Number: D966415',
-        'Part_Number: F1200B-V',
-        'UPC: 39026',
-    ]
+    for field in Controller.get_all_fields():
+        # 'unspsc' and 'root_domain' are computed before 'page_url',
+        # so they lack the reverse relationship in the 'details' column. It is created after this 'for' loop
+        add_to_details = False if field in [COLUMNS.UNSPSC.value, COLUMNS.ROOT_DOMAIN.value] else True
 
-    @staticmethod
-    def normalize_fields(df: pd.DataFrame):
-        """Make fields hashable"""
-        for field in df:
-            df[field] = df[field].apply(lambda x: tuple(x) if isinstance(x, np.ndarray) else x)
-
-            df[field] = df[field].apply(lambda x: ''.join(str(y) for y in x) if isinstance(x, tuple) and len(x) else x)
-
-            df[field] = df[field].apply(lambda x: str(x) if isinstance(x, dict) else x)
-
-        return df
-
-    @staticmethod
-    def get_consistent_fields(group_by_term: str, group: pd.DataFrame) -> set:
-        """Get consistent fields in a group"""
-        consistent_fields = set()
-        for field in group:
-            vals = group[field].unique()
-
-            if len(vals) == 1 and vals[0] and vals[0] != -1:
-                consistent_fields.add(field)
-
-        if consistent_fields:
-            print(f'Consistent fields:\n    *{"\n    *".join(f for f in consistent_fields)}\n')
-
-        return consistent_fields
-
-    @staticmethod
-    def same_field1_different_field2(
-        field1: str, field2: str, consistent_across_all_groups: bool = False, ignore_empty_fields1: bool = False
-    ) -> None:
-        """
-        Answers 'Can any 2 products with same {field1} have different values for {field2}'
-        Also prints consistent fields (that are the same for any 2 products) in the group
-        consistent_across_all_groups = True => prints the fields that remain constant within all groups
-        """
-        df = pd.read_parquet(FILE_PATH)
-
-        # make fields hashable for unique()
-        df = Utils.normalize_fields(df)
-
-        # Group by field1 and check if field2 values are consistent
-        grouped = df.groupby(field1)
-
-        consistent_fields_across_all_groups = set({field.value for field in COLUMNS})
-
-        for f1, group in grouped:
-            if ignore_empty_fields1 and (not f1 or 'not available' in str(f1).lower()):
-                continue
-
-            f2_values = group[field2].unique()
-
-            if len(f2_values) > 1:
-                print(f'Discrepancy found for {field1}: {f1}')
-                print(f'Different {field2} values: {f2_values}')
-
-                # print consistent fields for products grouped by field1
-                consistent_fields_across_all_groups.intersection_update(Utils.get_consistent_fields(field1, group))
-
-        if consistent_across_all_groups and consistent_fields_across_all_groups:
-            print(
-                f'Consistent fields across all groups:\n    *{"\n    *".join(f for f in consistent_fields_across_all_groups)}\n'
+        if field in MERGE_BY_MOST_FREQUENT:
+            field_frequencies = frequencies.get(field, {})
+            Controller.merge_by_the_most_frequent_value(
+                df, products_id, field, field_frequencies, deduplicated_product, add_to_details
             )
 
-    @staticmethod
-    def compare_same_unspsc_smilar_product_identifier():
-        """What fields are the same when unspsc are similar / exact and product_identifier is similar: IHB21K6 case"""
-        df = pd.read_parquet(
-            FILE_PATH,
-            filters=[(COLUMNS.BRAND.value, 'in', ['Base Heat On Demand', 'Base Heat'])],
-        )
-
-        df[COLUMNS.PRODUCT_IDENTIFIER.value] = df[COLUMNS.PRODUCT_IDENTIFIER.value].apply(
-            lambda x: tuple(x) if isinstance(x, np.ndarray) else x
-        )
-
-        df = (
-            df.groupby(COLUMNS.UNSPSC.value)
-            .apply(lambda x: x.sort_values(COLUMNS.PRODUCT_IDENTIFIER.value))
-            .reset_index(drop=True)
-        )
-        df.to_excel('PULA.xlsx')
-
-        # make fields hashable for unique()
-        for field in df:
-            if field in [COLUMNS.SIZE.value, COLUMNS.COLOR.value]:
-                df[field] = df[field].apply(lambda x: ''.join(str(y) for y in x))
-
-            df[field] = df[field].apply(lambda x: tuple(x) if isinstance(x, np.ndarray) else x)
-
-            df[field] = df[field].apply(lambda x: str(x) if isinstance(x, dict) else x)
-
-        for field in df:
-            vals = df[field].unique()
-            if len(vals) == 1 and vals[0] and vals[0] != -1:
-                print('consistent field:', field)
-
-    @staticmethod
-    def same_root_domain_and_product_title():
-        """Check if products with same root domain and product title can be different"""
-        df = pd.read_parquet(
-            FILE_PATH,
-        )
-
-        # make fields hashable for unique
-        df = Utils.normalize_fields(df)
-
-        grouped = df.groupby([COLUMNS.ROOT_DOMAIN.value, COLUMNS.PRODUCT_TITLE.value])
-
-        for (domain, title), group in grouped:
-            if len(group) < 2:
-                continue
-            consistent_field = set()
-            for field in group:
-                vals = group[field].unique()
-                if len(vals) == 1 and vals[0] and vals[0] != -1:
-                    consistent_field.add(field)
-            if len(consistent_field) == 2:
-                print(f'* for {domain} - {title} nothing else is consistent')
-
-    @staticmethod
-    def same_url():
-        """Answers 'Same url contains > 1 product?'"""
-        df = pd.read_parquet(FILE_PATH)
-        group = df.groupby(COLUMNS.PAGE_URL.value)
-        for url, group in group:
-            if len(group) > 1:
-                print(f'URL {url} contains > 1 product')
-
-
-class ReadParquetFile:
-    """Files related to reading Parquet files."""
-
-    @staticmethod
-    def flatten_value(value: Any, uniques: set):
-        """Recursively flatten values into a set."""
-        if isinstance(value, str | int | float):
-            uniques.add(value)
-            return
-
-        if isinstance(value, dict):
-            uniques.add(str(value))
-            return
-
-        if isinstance(value, list | tuple | set):
-            for v in value:
-                ReadParquetFile.flatten_value(v, uniques)
-            return
-
-        if isinstance(value, np.ndarray):
-            if value.size > 0:
-                for v in value:
-                    ReadParquetFile.flatten_value(v, uniques)
-            return
-
-    @staticmethod
-    def get_duplicates_for_field(field: str, file=FILE_PATH) -> list:
-        """Get all the duplicates for a specified field."""
-        # Read the Parquet file using pandas
-        df = pd.read_parquet(file)
-
-        if field not in df.columns:
-            raise ValueError(f"Field '{field}' not found in the parquet file.")
-
-        uniques = set()
-        duplicates = []
-
-        for value in df[field].dropna():
-            # If the value is a list / tuple / set, flatten it
-            if isinstance(value, str | int | float):
-                if value in uniques:
-                    duplicates.append(value)
-                uniques.add(value)
-
-                continue
-
-            try:
-                for v in value:
-                    if v in uniques:
-                        duplicates.append(v)
-                    uniques.add(v)
-            except TypeError:
-                pass
-
-        return list(set(duplicates))
-
-    @staticmethod
-    def extract_field(field: str, file: str = FILE_PATH, save: bool = False) -> list:
-        """Extract sorted unique values for specified field."""
-        # Read the Parquet file using pandas
-        df = pd.read_parquet(file)
-
-        if field not in df.columns:
-            raise ValueError(f"Field '{field}' not found in the parquet file.")
-
-        uniques = set()
-
-        for value in df[field].dropna():
-            ReadParquetFile.flatten_value(value, uniques)
-
-        sorted_results = sorted(uniques)
-
-        if save:
-            # Save to Excel
-            df = pd.DataFrame(sorted_results, columns=[field])
-            df.to_excel(f'{field}.xlsx', index=True)
-            print(f"Excel file saved as '{field}.xlsx'")
-
-        return sorted_results
-
-    @staticmethod
-    def save_to_excel(name: str = 'db2.xlsx') -> None:
-        parquet_file = (
-            pd.read_parquet(
-                FILE_PATH,
+        elif field in MERGE_BY_LEAST_FREQUENT:
+            field_frequencies = frequencies.get(field, {})
+            Controller.merge_by_the_least_frequent_value(
+                df, products_id, field, field_frequencies, deduplicated_product, add_to_details
             )
-            .groupby(
-                COLUMNS.UNSPSC.value,
-                group_keys=False,
-            )
-            .apply(lambda x: x.sort_values(by=COLUMNS.PRODUCT_NAME.value))
-        )
-        parquet_file.to_excel(name)
 
-    @staticmethod
-    def extract_fields():
-        parquet_file = pd.read_parquet(FILE_PATH)
-        columns = parquet_file.info()
-        print('columns', columns)
+        elif field in MERGE_BY_MIN_VALUE:
+            Controller.merge_by_the_minimum_value(df, products_id, field, deduplicated_product)
+
+        elif field in MERGE_BY_LENGTHIEST_VALUE:
+            Controller.merge_by_the_lengthiest_value(df, products_id, field, deduplicated_product)
+
+        elif field in MERGE_BY_COMPLETING:
+            Controller.merge_by_completing(df, products_id, field, deduplicated_product, add_to_details)
+
+        elif field == COLUMNS.PAGE_URL.value:
+            new_root_domain: str = deduplicated_product.get(COLUMNS.ROOT_DOMAIN.value)  # type: ignore
+            Controller.merge_url(df, products_id, field, new_root_domain, deduplicated_product)
+
+    for field in [COLUMNS.UNSPSC.value, COLUMNS.ROOT_DOMAIN.value]:
+        field_values = Controller.get_field_values_for_ids(df, products_id, field)
+        url_values = Controller.get_field_values_for_ids(df, products_id, COLUMNS.PAGE_URL.value)
+        values_to_url_mapping = defaultdict(set)
+
+        Controller.compute_values_to_url_mapping(field_values, url_values, values_to_url_mapping)
+        Controller.add_to_details(field, values_to_url_mapping, deduplicated_product)
+
+    # assign the product identifier
+    deduplicated_product[COLUMNS.PRODUCT_IDENTIFIER.value] = df[products_id[0]].get(COLUMNS.PRODUCT_IDENTIFIER.value)
+
+    # remove the duplicate products and add the merged & complete one
+    for product_id in products_id:
+        df.pop(product_id)
+
+    df[deduplicated_product.get(COLUMNS.ID.value)] = deduplicated_product
+
+
+def merge_by_product_identifier(
+    df: dict[Hashable, Any],
+    product_identifier_to_product: dict[int, str | tuple],
+    frequencies: dict[str, dict[str, int]],
+) -> None:
+    """
+    Group and merge products by 'product_identifier'.
+    Only non-empty 'product_identifier' values different from 'Not Available' are considered.
+    """
+    product_identifier_values: set[str | tuple] = {
+        product_identifier for product_identifier in product_identifier_to_product.values() if product_identifier
+    }
+
+    for product_identifier in product_identifier_values:
+        if not product_identifier or product_identifier == 'SKU: Not Available':
+            continue
+
+        products_id = Controller.filter_products_by_product_id(product_identifier_to_product, product_identifier)
+        # only interested in merging groups with at least 2 products
+        if len(products_id) < 2:
+            continue
+
+        merge_group(df, products_id, frequencies)
+
+
+def deduplicate(write_file: bool = False) -> None:
+    """
+    Main method for merging product data.
+
+    Example for 'frequencies':
+    {
+        'root_domain': {'root1': 15, 'root2': 2},
+        'unspsc': {'gardening': 4, 'sport wear': 7},
+    }
+
+    'frequencies' is used during merging to select the most / least frequent value for some fields
+    """
+    df = pd.read_parquet(SAMPLE_FILE_PATH)
+    Controller.add_additional_columns(df)
+    Controller.normalize_fields(df)
+
+    frequencies: dict[str, dict[str, int]] = defaultdict(dict)
+    for field in MERGE_BY_LEAST_FREQUENT + MERGE_BY_MOST_FREQUENT:
+        frequencies[field] = Controller.compute_frequency(df, field)
+
+    product_identifier_to_pid = Controller.get_id_to_product_identifier_mapping(df)
+
+    df_as_dict = df.to_dict(orient='index')
+    Controller.assign_ids(df_as_dict)
+    del df
+
+    merge_by_product_identifier(df_as_dict, product_identifier_to_pid, frequencies)  # type: ignore
+
+    if not write_file:
+        return
+
+    df = Controller.convert_to_dataframe(df_as_dict)
+    df.to_parquet(OUTPUT_FILE)
 
 
 if __name__ == '__main__':
-    Utils.same_field1_different_field2(COLUMNS.PRODUCT_IDENTIFIER.value, COLUMNS.UNSPSC.value, True, True)
-    # Utils.same_field1_different_field2(COLUMNS.PRODUCT_TITLE.value, COLUMNS.UNSPSC.value, True)
-    # Utils.same_product_identifier_same_unspfc()
-    # Utils.same_product_identifier_same_unspfc()
-    # Utils.same_product_title_same_unspfc()
-    # Utils.same_root_domain_and_product_title()
-    # vals = ReadParquetFile.extract_field(
-    #     COLUMNS.ETHICAL_AND_SUSTAINABILITY_PRACTICES.value
-    # )
+    print('For writing result to file, pass argument "-p"')
+    if (args_count := len(sys.argv)) > 2:
+        print(f'One or zero arguments expected, got {args_count - 1}')
+        raise SystemExit(2)
 
-    # ReadParquetFile.save_to_excel()
+    write: bool = True if len(sys.argv) == 2 and sys.argv[1] == '-p' else False
 
-    # results = ReadParquetFile.extract_field(COLUMNS.PRODUCT_IDENTIFIER.value)
-    # print(f'results: {results}')
-    # duplicates = ReadParquetFile.get_duplicates_for_field(
-    #     COLUMNS.PRODUCT_IDENTIFIER.value
-    # )
-    # print(f'Duplicates: {duplicates}')
-
-    # parquet_file = pd.read_parquet(
-    #     FILE_PATH,
-    #     filters=[
-    #         (
-    #             COLUMNS.UNSPSC.value,
-    #             '=',
-    #             'Doors',
-    #         )
-    #     ],
-    # )
-
-    # for field in COLUMNS:
-    #     if field == COLUMNS.ENERGY_EFFICIENCY:
-    #         continue
-
-    #     duplicates = ReadParquetFile.get_duplicates_for_field(field.value)
-    #     print(f'Field: {field.value}, Duplicates: {duplicates}')
+    deduplicate(write)

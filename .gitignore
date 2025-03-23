@@ -1,0 +1,8 @@
+env/
+.DS_Store
+.vscode/
+src/deduplicated_e2e_test.parquet
+src/deduplicated_test.parquet
+*/__pycache__/*
+src/dataset/
+*.xlsx

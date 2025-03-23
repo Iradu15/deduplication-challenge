@@ -31,7 +31,6 @@ lint.ignore = [
 force-exclude = true
 extend-exclude = [
   "**/migrations/*.py",
-  "**/tests/*.py",
   "env",
 ]
 
@@ -39,10 +38,7 @@ extend-exclude = [
 convention = "google"
 
 [tool.ruff.lint.isort]
-section-order = ["future", "standard-library", "third-party", "first-party", "footprint", "local-folder"]
-
-[tool.ruff.lint.isort.sections]
-footprint = ["footprint_app", "footprint_django"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 20
@@ -54,7 +50,8 @@ quote-style = "single"
 deps = ["pytest", "pytest-cov"]
 commands = ["coverage run -m pytest", "coverage xml"]
 
+
 [coverage.run]
 relative_files = true
-source = "back/"
+source = "/Users/ionescuradu/facultate/veridion/src/"
 branch = true

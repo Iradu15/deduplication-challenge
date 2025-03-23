@@ -1,0 +1,593 @@
+from copy import deepcopy
+from settings import SAMPLE_FILE_PATH, FILE_PATH, COLUMNS
+from typing import Any, Hashable, Literal
+import numpy as np
+from main import deduplicate, merge_group
+from controller import Controller
+import constants
+from settings import (
+    FILE_PATH,
+    MERGE_BY_LENGTHIEST_VALUE,
+    MERGE_BY_MIN_VALUE,
+    SAMPLE_FILE_PATH,
+    COLUMNS,
+    MERGE_BY_MOST_FREQUENT,
+    MERGE_BY_LEAST_FREQUENT,
+)
+import pandas as pd
+from collections import defaultdict
+
+
+class TestDeduplicateMethods:
+    """Tests for deduplication / merging methods"""
+
+    @staticmethod
+    def test_add_to_details() -> None:
+        """
+        Test that 'values_to_url_mapping' is added successfully to 'details' field
+        Interested in checking the added field inside 'details' is initialized and assigned the right value
+        """
+        values_to_url_mapping = {
+            'TMTD (Tetramethylthiuram Disulfide)': {'url_0'},
+            'Rubber Accelerator TMTD IPPD': {'url_1'},
+            'Rubber Processing': {'url_3', 'url_2'},
+            'Agriculture': {'url_2'},
+            -1: {'url_5'},
+            None: {'url_6'},
+            (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '96.0')): {'url_8', 'url_7'},
+            (('qualitative', True), ('type', 'exact'), ('unit', None), ('value', 'high')): {'url_8'},
+        }
+        field = COLUMNS.PRODUCT_TITLE.value
+        deduplicated_product = {}
+        Controller.add_to_details(field, values_to_url_mapping, deduplicated_product)
+        # unnecessary at this step
+        deduplicated_product.get(COLUMNS.DETAILS.value, {}).pop(COLUMNS.PAGE_URL.value)
+
+        expected_result = {
+            COLUMNS.DETAILS.value: {
+                COLUMNS.PRODUCT_TITLE.value: {
+                    'TMTD (Tetramethylthiuram Disulfide)': {'url_0'},
+                    'Rubber Accelerator TMTD IPPD': {'url_1'},
+                    'Rubber Processing': {'url_3', 'url_2'},
+                    'Agriculture': {'url_2'},
+                    -1: {'url_5'},
+                    None: {'url_6'},
+                    (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '96.0')): {'url_8', 'url_7'},
+                    (('qualitative', True), ('type', 'exact'), ('unit', None), ('value', 'high')): {'url_8'},
+                }
+            }
+        }
+
+        assert deduplicated_product == expected_result
+
+    @staticmethod
+    def test_compute_values_to_url_mapping_for_merge_by_completing() -> None:
+        """
+        Test that `values_to_url_mapping` is correctly created for any field in `MERGE_BY_COMPLETING`.
+
+        The test covers cases with:
+        - Duplicate values within tuples or as standalone values.
+        - Tuples that need to be split before processed.
+        """
+        field_values = [
+            'TMTD (Tetramethylthiuram Disulfide)',
+            'Rubber Accelerator TMTD IPPD',
+            ('Rubber Processing', 'Agriculture'),
+            ('Rubber Processing',),
+            (),
+            -1,
+            None,
+            ((('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '96.0')),),
+            (
+                (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '96.0')),
+                (('qualitative', True), ('type', 'exact'), ('unit', None), ('value', 'high')),
+            ),
+        ]
+        url_values = [f'url_{i}' for i in range(len(field_values))]
+
+        values_to_url_mapping = defaultdict(set)
+        Controller.compute_values_to_url_mapping(field_values, url_values, values_to_url_mapping)
+
+        expected_result = {
+            'TMTD (Tetramethylthiuram Disulfide)': {'url_0'},
+            'Rubber Accelerator TMTD IPPD': {'url_1'},
+            'Rubber Processing': {'url_3', 'url_2'},
+            'Agriculture': {'url_2'},
+            '-1': {'url_5'},
+            (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '96.0')): {'url_8', 'url_7'},
+            (('qualitative', True), ('type', 'exact'), ('unit', None), ('value', 'high')): {'url_8'},
+        }
+
+        assert values_to_url_mapping == expected_result
+
+    @staticmethod
+    def test_complete_record() -> None:
+        """
+        Test that completing a record with all available values work
+        Contains each type: None, int, tuple
+        """
+        field_values = [
+            ('Powder',),
+            ('Powder', 'Granules'),
+            ('Rubber Processing', 'Agriculture'),
+            ('Rubber Industry',),
+            None,
+            -1,
+        ]
+
+        expected_result = {None, 'Granules', 'Rubber Industry', 'Powder', 'Agriculture', 'Rubber Processing', -1}
+        assert Controller.compute_complete_record(field_values) == expected_result
+
+    @staticmethod
+    def test_aggregate_color() -> None:
+        """Test that aggregating colors works as expected"""
+        field_values = [
+            (),
+            (
+                (('original', 'Midlands'), ('simple', 'White')),
+                (('original', 'Midlands'), ('simple', 'Gray')),
+            ),
+            ((('original', 'Midlands'), ('simple', 'Gray')),),
+            ((('original', 'Midlands'), ('simple', 'Blue')),),
+        ]
+
+        expected_result = {(('original', 'Midlands'), ('simple', 'Blue, Gray, White'))}
+        assert Controller.aggregate_color(field_values) == expected_result
+
+    @staticmethod
+    def test_aggregate_purity_conflict() -> None:
+        """
+        Test that aggregating purity works as expected when there is a conflict between
+        literal value 'high' and numerical ones. Both reside as value for the same key.
+        The test is the same for pressure_rating and power_rating due to their structure
+        """
+        field_values = [
+            ((('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '99.998')),),
+            (),
+            (
+                (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '90.998')),
+                (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', 'high')),
+                (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '89.998')),
+            ),
+        ]
+
+        expected_result = {
+            (('qualitative', False), ('unit', None), ('min', '89.998'), ('max', '99.998')),
+        }
+        assert Controller.aggregate_purity_pressure_rating_power_rating(field_values) == expected_result
+
+    @staticmethod
+    def test_aggregate_purity_no_conflict() -> None:
+        """
+        Test that aggregating purity works as expected when there is no conflict between
+        literal value 'high' and numerical ones.
+        The test is the same for pressure_rating and power_rating due to their structure
+        """
+        field_values = [
+            ((('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '99.998')),),
+            (),
+            (
+                (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '90.998')),
+                (('qualitative', True), ('type', 'exact'), ('unit', None), ('value', 'high')),
+                (('qualitative', False), ('type', 'exact'), ('unit', None), ('value', '89.998')),
+            ),
+        ]
+
+        expected_result = {
+            (('qualitative', True), ('unit', None), ('min', 'high'), ('max', 'high')),
+            (('qualitative', False), ('unit', None), ('min', '89.998'), ('max', '99.998')),
+        }
+
+        assert Controller.aggregate_purity_pressure_rating_power_rating(field_values) == expected_result
+
+    @staticmethod
+    def test_aggregate_size() -> None:
+        """Test that aggregating sizes works as expected"""
+        field_values = [
+            (
+                (('dimension', 'Height'), ('qualitative', False), ('type', 'exact'), ('unit', 'in'), ('value', '20.7')),
+                (('dimension', 'Width'), ('qualitative', False), ('type', 'exact'), ('unit', 'in'), ('value', '16.9')),
+                (('dimension', 'Weight'), ('qualitative', False), ('type', 'exact'), ('unit', 'lbs'), ('value', '190')),
+            ),
+            (
+                (('dimension', 'Height'), ('qualitative', False), ('type', 'exact'), ('unit', 'in'), ('value', '30.7')),
+                (('dimension', 'Weight'), ('qualitative', False), ('type', 'exact'), ('unit', 'lbs'), ('value', '120')),
+            ),
+            ((('dimension', 'Height'), ('qualitative', False), ('type', 'exact'), ('unit', 'cm'), ('value', '209')),),
+        ]
+
+        expected_result = {
+            (('dimension', 'Weight'), ('unit', 'lbs'), ('min', '120.0'), ('max', '190.0')),
+            (('dimension', 'Height'), ('unit', 'in'), ('min', '20.7'), ('max', '30.7')),
+            (('dimension', 'Height'), ('unit', 'cm'), ('min', '209.0'), ('max', '209.0')),
+            (('dimension', 'Width'), ('unit', 'in'), ('min', '16.9'), ('max', '16.9')),
+        }
+
+        assert Controller.aggregate_size(field_values) == expected_result
+
+    @staticmethod
+    def test_aggregate_prices() -> None:
+        """Test that aggregating prices works as expected"""
+        field_values = [
+            ((('amount', 1796.280029296875), ('currency', 'AUD'), ('type', 'exact')),),
+            (
+                (('amount', 1796.280029296875), ('currency', 'AUD'), ('type', 'min')),
+                (('amount', 1975.9100341796875), ('currency', 'AUD'), ('type', 'max')),
+            ),
+            (),
+            ((('amount', 140), ('currency', 'EUR'), ('type', 'exact')),),
+            (
+                (('amount', 123), ('currency', 'EUR'), ('type', 'min')),
+                (('amount', 1975.9100341796875), ('currency', 'AUD'), ('type', 'max')),
+            ),
+        ]
+
+        expected_result = {
+            (('min', '123'), ('currency', 'EUR'), ('max', '140')),
+            (('min', '1796.280029296875'), ('currency', 'AUD'), ('max', '1975.9100341796875')),
+        }
+
+        assert Controller.aggregate_prices(field_values) == expected_result
+
+    @staticmethod
+    def test_aggregate_energy_efficiency() -> None:
+        """Test that aggregating energy_efficiency works as expected"""
+        field_values = [
+            None,
+            (
+                (
+                    ('exact_percentage', None),
+                    ('max_percentage', None),
+                    ('min_percentage', None),
+                    ('qualitative', 'high'),
+                    ('standard_label', None),
+                ),
+            ),
+            (
+                (
+                    ('exact_percentage', 40.0),
+                    ('max_percentage', None),
+                    ('min_percentage', None),
+                    ('qualitative', None),
+                    ('standard_label', None),
+                ),
+            ),
+        ]
+
+        expected_result = {
+            (('qualitative', None), ('standard_label', None), ('min', '40.0'), ('max', '40.0')),
+            (('qualitative', 'high'), ('standard_label', None), ('min', '-1.0'), ('max', '-1.0')),
+        }
+
+        assert Controller.aggregate_energy_efficiency(field_values) == expected_result  # type: ignore
+
+    @staticmethod
+    def test_aggregate_production_capacity() -> None:
+        """Test that aggregating production_capacity works as expected"""
+        field_values = [
+            ((('quantity', 400000000), ('time_frame', 'Year'), ('type', 'exact'), ('unit', 'Units')),),
+            ((('quantity', 60000), ('time_frame', 'Month'), ('type', 'exact'), ('unit', 'Units')),),
+            ((('quantity', 1000), ('time_frame', 'Day'), ('type', 'exact'), ('unit', 'Kilograms')),),
+            (
+                (('quantity', 60), ('time_frame', 'Year'), ('type', 'min'), ('unit', 'Tons')),
+                (('quantity', 70), ('time_frame', 'Year'), ('type', 'max'), ('unit', 'Tons')),
+            ),
+        ]
+
+        expected_result = {
+            (('min', '60.0'), ('time_frame', 'Year'), ('unit', 'Tons'), ('max', '70.0')),
+            (('min', '1000.0'), ('time_frame', 'Day'), ('unit', 'Kilograms'), ('max', '1000.0')),
+            (('min', '60000.0'), ('time_frame', 'Month'), ('unit', 'Units'), ('max', '60000.0')),
+            (('min', '400000000.0'), ('time_frame', 'Year'), ('unit', 'Units'), ('max', '400000000.0')),
+        }
+
+        assert Controller.aggregate_production_capacity(field_values) == expected_result
+
+    @staticmethod
+    def prepare_data_before_deduplication() -> tuple[
+        dict, Literal['CAS: 137-26-8'], list[int], dict, pd.DataFrame, dict
+    ]:
+        """Prepare data before deduplication"""
+        deduplicated_product = {}
+        product_identifier = 'CAS: 137-26-8'
+        df_as_dict = deepcopy(constants.SAMPLE_PRODUCTS)
+        df = pd.DataFrame.from_dict(constants.SAMPLE_PRODUCTS, orient='index')
+        products_id = Controller.filter_products_by_product_id(
+            constants.SAMPLE_PRODUCTS_ID_TO_PRODUCT_IDENTIFIER_MAPPING,  # type: ignore
+            product_identifier,
+        )
+        frequencies: dict[str, dict[str, int]] = defaultdict(dict)
+
+        return deduplicated_product, product_identifier, products_id, df_as_dict, df, frequencies
+
+    @staticmethod
+    def test_merge_urls() -> None:
+        """Test that all urls are stacked together in 'details' field / column"""
+        # prepare data before deduplication
+        deduplicated_product, _, products_id, df_as_dict, _, _ = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        # provide different root_domain such that it needs to adapt its url to match it
+        new_root_domain = 'advancedpressuresystems.ca'
+        field = COLUMNS.PAGE_URL.value
+        Controller.merge_url(
+            df_as_dict,  # type: ignore
+            products_id,
+            field,
+            new_root_domain,
+            deduplicated_product,
+        )
+
+        assert deduplicated_product.get(COLUMNS.DETAILS.value, {}).get(COLUMNS.PAGE_URL.value) == {
+            'https://advancedpressuresystems.ca/1',
+            'https://www.harebueng.co.za/antiscorching-pvi-antiscorching-pvi-suppliers-poland.html',
+        }
+
+    @staticmethod
+    def test_right_url_value_is_chosen() -> None:
+        """Test that the correct value is chosen for page_url"""
+        # prepare data before deduplication
+        deduplicated_product, _, products_id, df_as_dict, _, _ = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        # provide different root_domain such that it needs to adapt its url to match it
+        new_root_domain = 'advancedpressuresystems.ca'
+        field = COLUMNS.PAGE_URL.value
+        Controller.merge_url(
+            df_as_dict,  # type: ignore
+            products_id,
+            field,
+            new_root_domain,
+            deduplicated_product,
+        )
+
+        assert deduplicated_product.get(COLUMNS.PAGE_URL.value) == 'https://advancedpressuresystems.ca/1'
+
+    @staticmethod
+    def test_lengthiest_value_is_chosen() -> None:
+        """Test that the lengthiest value is chosen for every field of MERGE_BY_LENGTHIEST_VALUE"""
+        # prepare data before deduplication
+        deduplicated_product, _, products_id, df_as_dict, _, _ = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        for field in MERGE_BY_LENGTHIEST_VALUE:
+            Controller.merge_by_the_lengthiest_value(
+                df_as_dict,  # type: ignore
+                products_id,
+                field,
+                deduplicated_product,
+            )
+
+        field_length_mapping = {k: len(v) for k, v in deduplicated_product.items()}
+        assert field_length_mapping == {'description': 525, 'product_summary': 1480}
+
+    @staticmethod
+    def test_minimum_value_is_chosen() -> None:
+        """Test that the minimum value is chosen for every field of MERGE_BY_MIN_VALUE"""
+        # prepare data before deduplication
+        deduplicated_product, _, products_id, df_as_dict, _, _ = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        for field in MERGE_BY_MIN_VALUE:
+            Controller.merge_by_the_minimum_value(
+                df_as_dict,  # type: ignore
+                products_id,
+                field,
+                deduplicated_product,
+            )
+
+        assert deduplicated_product == {'id': 9971}
+
+    @staticmethod
+    def test_compute_values_to_url_mapping_for_least_frequent_values() -> None:
+        """Test that values_to_url_mapping is created well for every field of MERGE_BY_LEAST_FREQUENT"""
+        deduplicated_product, _, products_id, df_as_dict, df, frequencies = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        for field in MERGE_BY_LEAST_FREQUENT:
+            frequencies[field] = Controller.compute_frequency(df, field)
+            field_frequencies = frequencies.get(field, {})
+
+            Controller.merge_by_the_least_frequent_value(
+                df_as_dict,  # type: ignore
+                products_id,
+                field,
+                field_frequencies,
+                deduplicated_product,
+            )
+
+        # not needed at this step
+        deduplicated_product[COLUMNS.DETAILS.value].pop(COLUMNS.PAGE_URL.value, None)
+
+        assert deduplicated_product[COLUMNS.DETAILS.value] == {
+            'product_title': {
+                'Rubber Accelerator TMTD IPPD': {'https://advancedpressuresystems.ca/1'},
+                'Rubber Accelerator TMQ': {
+                    'https://www.harebueng.co.za/antiscorching-pvi-antiscorching-pvi-suppliers-poland.html'
+                },
+            },
+            'product_name': {
+                'Rubber Accelerator': {'https://advancedpressuresystems.ca/1'},
+                'TMTD': {'https://www.harebueng.co.za/antiscorching-pvi-antiscorching-pvi-suppliers-poland.html'},
+            },
+        }
+
+    @staticmethod
+    def test_least_frequent_values_are_chosen() -> None:
+        """Test that the least frequent values are chosen for every field of MERGE_BY_LEAST_FREQUENT"""
+        # prepare data before deduplication
+        deduplicated_product, _, products_id, df_as_dict, df, frequencies = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        for field in MERGE_BY_LEAST_FREQUENT:
+            frequencies[field] = Controller.compute_frequency(df, field)
+            field_frequencies = frequencies.get(field, {})
+
+            Controller.merge_by_the_least_frequent_value(
+                df_as_dict,  # type: ignore
+                products_id,
+                field,
+                field_frequencies,
+                deduplicated_product,
+                False,
+            )
+
+        assert deduplicated_product == {
+            'product_title': 'Rubber Accelerator TMTD IPPD',
+            'product_name': 'TMTD',
+        }
+
+    @staticmethod
+    def test_compute_values_to_url_mapping_for_most_frequent_values() -> None:
+        """Test that values_to_url_mapping is created well for every field of MERGE_BY_MOST_FREQUENT"""
+        # prepare data before deduplication
+        deduplicated_product, _, products_id, df_as_dict, df, frequencies = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        for field in MERGE_BY_MOST_FREQUENT:
+            frequencies[field] = Controller.compute_frequency(df, field)
+            field_frequencies = frequencies.get(field, {})
+
+            Controller.merge_by_the_most_frequent_value(
+                df_as_dict,  # type: ignore
+                products_id,
+                field,
+                field_frequencies,
+                deduplicated_product,
+            )
+
+        # not needed at this step
+        deduplicated_product[COLUMNS.DETAILS.value].pop(COLUMNS.PAGE_URL.value, None)
+
+        assert deduplicated_product[COLUMNS.DETAILS.value] == {
+            'unspsc': {
+                'Curing agents': {'https://advancedpressuresystems.ca/1'},
+                'Faucets or taps': {
+                    'https://www.harebueng.co.za/antiscorching-pvi-antiscorching-pvi-suppliers-poland.html'
+                },
+            },
+            'root_domain': {
+                'advancedpressuresystems.ca': {'https://advancedpressuresystems.ca/1'},
+                'harebueng.co.za': {
+                    'https://www.harebueng.co.za/antiscorching-pvi-antiscorching-pvi-suppliers-poland.html'
+                },
+            },
+            'brand': {
+                'Nutrena': {'https://advancedpressuresystems.ca/1'},
+            },
+        }
+
+    @staticmethod
+    def test_most_frequent_values_are_chosen() -> None:
+        """Test that the most frequent values are chosen for every field of MERGE_BY_MOST_FREQUENT"""
+        deduplicated_product, _, products_id, df_as_dict, df, frequencies = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        for field in MERGE_BY_MOST_FREQUENT:
+            frequencies[field] = Controller.compute_frequency(df, field)
+            field_frequencies = frequencies.get(field, {})
+
+            Controller.merge_by_the_most_frequent_value(
+                df_as_dict,  # type: ignore
+                products_id,
+                field,
+                field_frequencies,
+                deduplicated_product,
+                False,
+            )
+
+        assert deduplicated_product == {
+            'unspsc': 'Curing agents',
+            'root_domain': 'harebueng.co.za',
+            'brand': 'Nutrena',
+        }
+
+    @staticmethod
+    def test_frequency_is_updated_after_deduplication() -> None:
+        """Test that the most frequent values are chosen for every field of MERGE_BY_MOST_FREQUENT"""
+        deduplicated_product, _, products_id, df_as_dict, df, frequencies = (
+            TestDeduplicateMethods.prepare_data_before_deduplication()
+        )
+
+        for field in MERGE_BY_MOST_FREQUENT:
+            frequencies[field] = Controller.compute_frequency(df, field)
+            field_frequencies = frequencies.get(field, {})
+
+            Controller.merge_by_the_most_frequent_value(
+                df_as_dict,  # type: ignore
+                products_id,
+                field,
+                field_frequencies,
+                deduplicated_product,
+                False,
+            )
+
+        frequencies_as_dict = {k: dict(v) for k, v in frequencies.items()}
+        assert frequencies_as_dict == {
+            'unspsc': {'Pipe connectors': 1, 'Curing agents': 2},
+            'root_domain': {'studio-atcoat.com': 1, 'harebueng.co.za': 2},
+            'brand': {'DeRoyal': 1, 'Nutrena': 2},
+        }
+
+    @staticmethod
+    def test_deduplication_update():
+        """
+        Test that after deduplication, products with the same product_identifier
+        are removed and replaced with a single deduplicated product.
+        """
+        _, _, products_id, df_as_dict, _, _ = TestDeduplicateMethods.prepare_data_before_deduplication()
+        frequencies = deepcopy(constants.COMPUTE_FREQUENCIES_RESULT)
+        initial_products = list(df_as_dict.keys())
+        merge_group(df_as_dict, products_id, frequencies)
+        deduplicated_products = list(df_as_dict.keys())
+        assert len(initial_products) == len(deduplicated_products) + 1
+        assert 10275 not in deduplicated_products
+
+
+class TestHelperMethods:
+    """Tests for helper methods"""
+
+    @staticmethod
+    def test_frequency_count() -> None:
+        """Test compute_frequency method"""
+        df = pd.DataFrame.from_dict(constants.SAMPLE_PRODUCTS, orient='index')
+        frequencies: dict[str, dict[str, int]] = defaultdict(dict)
+        for field in MERGE_BY_LEAST_FREQUENT + MERGE_BY_MOST_FREQUENT:
+            frequencies[field] = Controller.compute_frequency(df, field)
+
+        frequencies_as_dict = {k: dict(v) for k, v in frequencies.items()}
+        assert frequencies_as_dict == constants.COMPUTE_FREQUENCIES_RESULT
+
+    @staticmethod
+    def test_product_identifier_to_pid():
+        """Test get_id_to_product_identifier_mapping method"""
+        df = pd.read_parquet(SAMPLE_FILE_PATH)
+        Controller.add_additional_columns(df)
+        Controller.normalize_fields(df)
+
+        product_identifier_to_pid = Controller.get_id_to_product_identifier_mapping(df)
+        assert product_identifier_to_pid == constants.ID_TO_PRODUCT_IDENTIFIER_MAPPING
+
+    @staticmethod
+    def test_assign_ids():
+        """Test assigning ids"""
+        df_as_dict: dict = constants.SAMPLE_PRODUCTS
+        Controller.assign_ids(df_as_dict)
+        assert all(k == v.get(COLUMNS.ID.value) for k, v in df_as_dict.items())
+
+    @staticmethod
+    def test_filter_products_by_product_id():
+        """Test filtering products by specific product_id works"""
+        product_identifier = 'CAS: 137-26-8'
+        products_id = Controller.filter_products_by_product_id(
+            constants.ID_TO_PRODUCT_IDENTIFIER_MAPPING, product_identifier
+        )
+        assert products_id == [9971, 10275]
