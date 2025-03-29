@@ -107,9 +107,8 @@ class Controller:
         for value, url in zip(field_values, url_values):
             values = [value] if isinstance(value, int | str | float | type(None)) else value
             filtered_values = [v for v in values if v is not None]
-            for filtered_v in filtered_values:
-                v = str(value) if isinstance(value, bool | int | float) else value
-                values_to_url_mapping[v].add(url)
+            for v in filtered_values:
+                values_to_url_mapping[str(v) if isinstance(v, int | str | float) else v].add(url)
 
     @staticmethod
     def get_all_fields() -> list[str]:

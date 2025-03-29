@@ -1,11 +1,11 @@
 from enum import Enum
 
 
-OUTPUT_FILE = 'deduplicated.parquet'
-OUTPUT_E2E_FILE = 'deduplicated_e2e_test.parquet'
-OUTPUT_TEST_FILE = 'deduplicated_test.parquet'
+OUTPUT_FILE = 'dataset/deduplicated.parquet'
+OUTPUT_E2E_FILE = 'dataset/deduplicated_e2e_test.parquet'
+OUTPUT_TEST_FILE = 'dataset/deduplicated_test.parquet'
 FILE_PATH = 'db.snappy.parquet'
-SAMPLE_FILE_PATH = 'sample.parquet'
+SAMPLE_FILE_PATH = 'dataset/sample.parquet'
 
 
 class COLUMNS(Enum):

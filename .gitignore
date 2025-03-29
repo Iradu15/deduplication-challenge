@@ -6,3 +6,5 @@ src/deduplicated_test.parquet
 */__pycache__/*
 src/dataset/
 *.xlsx
+*.pyc
+tests/__pycache__/*

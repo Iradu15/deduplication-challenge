@@ -1,8 +1,8 @@
 from settings import (
+    FILE_PATH,
     MERGE_BY_COMPLETING,
     MERGE_BY_LENGTHIEST_VALUE,
     MERGE_BY_MIN_VALUE,
-    SAMPLE_FILE_PATH,
     COLUMNS,
     MERGE_BY_MOST_FREQUENT,
     MERGE_BY_LEAST_FREQUENT,
@@ -109,7 +109,7 @@ def deduplicate(write_file: bool = False) -> None:
 
     'frequencies' is used during merging to select the most / least frequent value for some fields
     """
-    df = pd.read_parquet(SAMPLE_FILE_PATH)
+    df = pd.read_parquet(FILE_PATH)
     Controller.add_additional_columns(df)
     Controller.normalize_fields(df)
 

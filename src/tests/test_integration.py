@@ -1,23 +1,15 @@
 from copy import deepcopy
-from re import L
-from settings import SAMPLE_FILE_PATH, FILE_PATH, COLUMNS
-from typing import Any, Hashable, Literal
-import numpy as np
-from main import deduplicate, merge_group, merge_by_product_identifier
+from settings import FILE_PATH, COLUMNS
+from main import merge_by_product_identifier
 from controller import Controller
 import constants
 from settings import (
     OUTPUT_TEST_FILE,
-    FILE_PATH,
     MERGE_BY_COMPLETING,
     MERGE_BY_LENGTHIEST_VALUE,
     MERGE_BY_MIN_VALUE,
-    SAMPLE_FILE_PATH,
-    COLUMNS,
     MERGE_BY_MOST_FREQUENT,
     MERGE_BY_LEAST_FREQUENT,
-    INF,
-    OUTPUT_FILE,
     OUTPUT_E2E_FILE,
 )
 import pandas as pd
