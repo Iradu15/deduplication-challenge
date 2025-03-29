@@ -4,7 +4,8 @@ env/
 src/deduplicated_e2e_test.parquet
 src/deduplicated_test.parquet
 */__pycache__/*
-src/dataset/
 *.xlsx
 *.pyc
 tests/__pycache__/*
+src/dataset/deduplicated_test.parquet
+src/dataset/deduplicated_e2e_test.parquet
