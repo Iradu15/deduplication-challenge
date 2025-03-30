@@ -1,8 +1,10 @@
 from copy import deepcopy
-from settings import FILE_PATH, COLUMNS
-from main import merge_by_product_identifier
+from collections import defaultdict
+import pandas as pd
+
 from controller import Controller
 import constants
+from main import merge_by_product_identifier
 from settings import (
     OUTPUT_TEST_FILE,
     MERGE_BY_COMPLETING,
@@ -11,9 +13,9 @@ from settings import (
     MERGE_BY_MOST_FREQUENT,
     MERGE_BY_LEAST_FREQUENT,
     OUTPUT_E2E_FILE,
+    FILE_PATH,
+    COLUMNS,
 )
-import pandas as pd
-from collections import defaultdict
 
 
 class TestIntegration:
@@ -24,7 +26,7 @@ class TestIntegration:
 
     @staticmethod
     def test_e2e() -> None:
-        """Test the whole flow successfully computes the resulted file"""
+        """Test the flow successfully writes the resulted file"""
         df = pd.read_parquet(FILE_PATH)
         Controller.add_additional_columns(df)
         Controller.normalize_fields(df)
@@ -39,7 +41,7 @@ class TestIntegration:
         Controller.assign_ids(df_as_dict)
         del df
 
-        merge_by_product_identifier(df_as_dict, product_identifier_to_pid, frequencies)  # type: ignore
+        merge_by_product_identifier(df_as_dict, product_identifier_to_pid, frequencies)
         df = Controller.convert_to_dataframe(df_as_dict)
         df.to_parquet(OUTPUT_E2E_FILE)
 
@@ -47,7 +49,7 @@ class TestIntegration:
 
     @staticmethod
     def test_convert_dict_back_to_parquet() -> None:
-        """Test that conversion back to parquet is successful"""
+        """Test that converting dictionary back to parquet is successful"""
         df_as_dict = deepcopy(constants.SAMPLE_PRODUCTS)
         frequencies = deepcopy(constants.COMPUTE_FREQUENCIES_RESULT)
         product_identifier_to_pid = constants.SAMPLE_PRODUCTS_ID_TO_PRODUCT_IDENTIFIER_MAPPING
@@ -62,7 +64,7 @@ class TestIntegration:
     def test_details_for_merge_by_lengthiest_value_were_modified_correctly() -> None:
         """
         Test that every field from 'details' corresponding to MERGE_BY_LENGTHIEST_VALUE was aggregated correctly
-        for product with id 9971. In this case all the fields are empty because we dont store them in 'details'
+        for product with id 9971. They should be empty because we dont store them in 'details'
         """
         df_as_dict = deepcopy(constants.SAMPLE_PRODUCTS)
         frequencies = deepcopy(constants.COMPUTE_FREQUENCIES_RESULT)
@@ -439,8 +441,8 @@ class TestIntegration:
         assert deduplicated_fields == expected_result
 
     @staticmethod
-    def test_merge_by_minimum_value_fields_were_modified_correctly() -> None:
-        """Test that every field from MERGE_BY_MIN_VALUE was modified correctly for product with id 9971"""
+    def test_id_is_modified_correctly() -> None:
+        """Test that every field from MERGE_BY_MIN_VALUE (only id) was modified correctly for product with id 9971"""
         df_as_dict = deepcopy(constants.SAMPLE_PRODUCTS)
         frequencies = deepcopy(constants.COMPUTE_FREQUENCIES_RESULT)
         product_identifier_to_pid = constants.SAMPLE_PRODUCTS_ID_TO_PRODUCT_IDENTIFIER_MAPPING
@@ -489,7 +491,8 @@ class TestIntegration:
     @staticmethod
     def test_products_remain_the_same() -> None:
         """
-        Test that the products that should not be deduplicated remain the same
+        Test that the products that should not be deduplicated (do not have other instances of themselves)
+        remain the same.
         Apart from product with id 9971, the rest should be the same, exception being 10275, which was merged into 9971
         """
         df_as_dict = deepcopy(constants.SAMPLE_PRODUCTS)

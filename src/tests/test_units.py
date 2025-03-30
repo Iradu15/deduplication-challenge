@@ -1,21 +1,63 @@
 from copy import deepcopy
-from settings import SAMPLE_FILE_PATH, COLUMNS
+from collections import defaultdict
+import pandas as pd
 from typing import Literal
-from main import merge_group
+
 from controller import Controller
 import constants
+from main import merge_group
 from settings import (
     MERGE_BY_LENGTHIEST_VALUE,
     MERGE_BY_MIN_VALUE,
     MERGE_BY_MOST_FREQUENT,
     MERGE_BY_LEAST_FREQUENT,
+    SAMPLE_FILE_PATH,
+    COLUMNS,
 )
-import pandas as pd
-from collections import defaultdict
+
+
+class TestHelperMethods:
+    """Tests for helper methods"""
+
+    @staticmethod
+    def test_frequency_count() -> None:
+        """Test that computing frequencies (done via compute_frequency) works as intended"""
+        df = pd.DataFrame.from_dict(constants.SAMPLE_PRODUCTS, orient='index')
+        frequencies: dict[str, dict[str, int]] = defaultdict(dict)
+        for field in MERGE_BY_LEAST_FREQUENT + MERGE_BY_MOST_FREQUENT:
+            frequencies[field] = Controller.compute_frequency(df, field)
+
+        frequencies_as_dict = {k: dict(v) for k, v in frequencies.items()}
+        assert frequencies_as_dict == constants.COMPUTE_FREQUENCIES_RESULT
+
+    @staticmethod
+    def test_product_identifier_to_pid() -> None:
+        """Test mapping pid to product_identifier functionality (done via get_id_to_product_identifier_mapping)"""
+        df = pd.read_parquet(SAMPLE_FILE_PATH)
+        Controller.normalize_fields(df)
+
+        product_identifier_to_pid = Controller.get_id_to_product_identifier_mapping(df)
+        assert product_identifier_to_pid == constants.ID_TO_PRODUCT_IDENTIFIER_MAPPING
+
+    @staticmethod
+    def test_assign_ids() -> None:
+        """Test assigning ids functionality"""
+        df_as_dict: dict = constants.SAMPLE_PRODUCTS
+        Controller.assign_ids(df_as_dict)
+        assert all(k == v.get(COLUMNS.ID.value) for k, v in df_as_dict.items())
+
+    @staticmethod
+    def test_filter_products_by_product_id() -> None:
+        """Test filtering products by specific product_id works"""
+        product_identifier = 'CAS: 137-26-8'
+        products_id = Controller.filter_products_by_product_id(
+            constants.ID_TO_PRODUCT_IDENTIFIER_MAPPING, product_identifier
+        )
+        assert products_id == [9971, 10275]
 
 
 class TestDeduplicateMethods:
-    """Tests for deduplication / merging methods"""
+    """Tests for deduplication (merging) methods"""
 
     @staticmethod
     def test_add_to_details() -> None:
@@ -36,6 +78,7 @@ class TestDeduplicateMethods:
         field = COLUMNS.PRODUCT_TITLE.value
         deduplicated_product = {}
         Controller.add_to_details(field, values_to_url_mapping, deduplicated_product)
+
         # unnecessary at this step
         deduplicated_product.get(COLUMNS.DETAILS.value, {}).pop(COLUMNS.PAGE_URL.value)
 
@@ -59,7 +102,8 @@ class TestDeduplicateMethods:
     @staticmethod
     def test_compute_values_to_url_mapping_for_merge_by_completing() -> None:
         """
-        Test that `values_to_url_mapping` is correctly created for any field in `MERGE_BY_COMPLETING`.
+        Test that values to url mapping (via `values_to_url_mapping`) is correctly created for any field
+        in `MERGE_BY_COMPLETING`.
 
         The test covers cases with:
         - Duplicate values within tuples or as standalone values.
@@ -100,7 +144,7 @@ class TestDeduplicateMethods:
     def test_complete_record() -> None:
         """
         Test that completing a record with all available values work
-        Contains each type: None, int, tuple
+        Contains each possible type that is passed as argument for compute_general_complete_record: None, int, tuple
         """
         field_values = [
             ('Powder',),
@@ -125,9 +169,13 @@ class TestDeduplicateMethods:
             ),
             ((('original', 'Midlands'), ('simple', 'Gray')),),
             ((('original', 'Midlands'), ('simple', 'Blue')),),
+            ((('original', 'Orange'), ('simple', 'Blue')),),
         ]
 
-        expected_result = {(('original', 'Midlands'), ('simple', 'Blue, Gray, White'))}
+        expected_result = {
+            (('original', 'Midlands'), ('simple', 'Blue, Gray, White')),
+            (('original', 'Orange'), ('simple', 'Blue')),
+        }
         assert Controller.aggregate_color(field_values) == expected_result
 
     @staticmethod
@@ -155,8 +203,8 @@ class TestDeduplicateMethods:
     @staticmethod
     def test_aggregate_purity_no_conflict() -> None:
         """
-        Test that aggregating purity works as expected when there is no conflict between
-        literal value 'high' and numerical ones.
+        Test that aggregating purity works as expected when there is no conflict between literal value 'high'
+        and numerical ones.
         The test is the same for pressure_rating and power_rating due to their structure
         """
         field_values = [
@@ -178,7 +226,7 @@ class TestDeduplicateMethods:
 
     @staticmethod
     def test_aggregate_size() -> None:
-        """Test that aggregating sizes works as expected"""
+        """Test that aggregating sizes by dimension and unit works as expected"""
         field_values = [
             (
                 (('dimension', 'Height'), ('qualitative', False), ('type', 'exact'), ('unit', 'in'), ('value', '20.7')),
@@ -203,7 +251,7 @@ class TestDeduplicateMethods:
 
     @staticmethod
     def test_aggregate_prices() -> None:
-        """Test that aggregating prices works as expected"""
+        """Test that aggregating prices by currency works as expected"""
         field_values = [
             ((('amount', 1796.280029296875), ('currency', 'AUD'), ('type', 'exact')),),
             (
@@ -227,7 +275,7 @@ class TestDeduplicateMethods:
 
     @staticmethod
     def test_aggregate_energy_efficiency() -> None:
-        """Test that aggregating energy_efficiency works as expected"""
+        """Test that aggregating energy_efficiency by qualitative and standard_label works as expected"""
         field_values = [
             None,
             (
@@ -259,7 +307,7 @@ class TestDeduplicateMethods:
 
     @staticmethod
     def test_aggregate_production_capacity() -> None:
-        """Test that aggregating production_capacity works as expected"""
+        """Test that aggregating production_capacity by time_frame and unit works as expected"""
         field_values = [
             ((('quantity', 400000000), ('time_frame', 'Year'), ('type', 'exact'), ('unit', 'Units')),),
             ((('quantity', 60000), ('time_frame', 'Month'), ('type', 'exact'), ('unit', 'Units')),),
@@ -283,7 +331,7 @@ class TestDeduplicateMethods:
     def prepare_data_before_deduplication() -> tuple[
         dict, Literal['CAS: 137-26-8'], list[int], dict, pd.DataFrame, dict
     ]:
-        """Prepare data before deduplication"""
+        """Helper method for preparing data before deduplication"""
         deduplicated_product = {}
         product_identifier = 'CAS: 137-26-8'
         df_as_dict = deepcopy(constants.SAMPLE_PRODUCTS)
@@ -298,7 +346,7 @@ class TestDeduplicateMethods:
 
     @staticmethod
     def test_merge_urls() -> None:
-        """Test that all urls are stacked together in 'details' field / column"""
+        """Test that all urls are stacked together in 'details' field"""
         # prepare data before deduplication
         deduplicated_product, _, products_id, df_as_dict, _, _ = (
             TestDeduplicateMethods.prepare_data_before_deduplication()
@@ -308,7 +356,7 @@ class TestDeduplicateMethods:
         new_root_domain = 'advancedpressuresystems.ca'
         field = COLUMNS.PAGE_URL.value
         Controller.merge_url(
-            df_as_dict,  # type: ignore
+            df_as_dict,
             products_id,
             field,
             new_root_domain,
@@ -328,11 +376,12 @@ class TestDeduplicateMethods:
             TestDeduplicateMethods.prepare_data_before_deduplication()
         )
 
-        # provide different root_domain such that it needs to adapt its url to match it
+        # provide different root_domain such that it needs to adapt its url to match it.
+        # its previous root domain was harebueng.co.za
         new_root_domain = 'advancedpressuresystems.ca'
         field = COLUMNS.PAGE_URL.value
         Controller.merge_url(
-            df_as_dict,  # type: ignore
+            df_as_dict,
             products_id,
             field,
             new_root_domain,
@@ -370,7 +419,7 @@ class TestDeduplicateMethods:
 
         for field in MERGE_BY_MIN_VALUE:
             Controller.merge_by_the_minimum_value(
-                df_as_dict,  # type: ignore
+                df_as_dict,
                 products_id,
                 field,
                 deduplicated_product,
@@ -380,7 +429,7 @@ class TestDeduplicateMethods:
 
     @staticmethod
     def test_compute_values_to_url_mapping_for_least_frequent_values() -> None:
-        """Test that values_to_url_mapping is created well for every field of MERGE_BY_LEAST_FREQUENT"""
+        """Test that values_to_url_mapping is created for every field of MERGE_BY_LEAST_FREQUENT"""
         deduplicated_product, _, products_id, df_as_dict, df, frequencies = (
             TestDeduplicateMethods.prepare_data_before_deduplication()
         )
@@ -390,7 +439,7 @@ class TestDeduplicateMethods:
             field_frequencies = frequencies.get(field, {})
 
             Controller.merge_by_the_least_frequent_value(
-                df_as_dict,  # type: ignore
+                df_as_dict,
                 products_id,
                 field,
                 field_frequencies,
@@ -426,7 +475,7 @@ class TestDeduplicateMethods:
             field_frequencies = frequencies.get(field, {})
 
             Controller.merge_by_the_least_frequent_value(
-                df_as_dict,  # type: ignore
+                df_as_dict,
                 products_id,
                 field,
                 field_frequencies,
@@ -452,7 +501,7 @@ class TestDeduplicateMethods:
             field_frequencies = frequencies.get(field, {})
 
             Controller.merge_by_the_most_frequent_value(
-                df_as_dict,  # type: ignore
+                df_as_dict,
                 products_id,
                 field,
                 field_frequencies,
@@ -492,7 +541,7 @@ class TestDeduplicateMethods:
             field_frequencies = frequencies.get(field, {})
 
             Controller.merge_by_the_most_frequent_value(
-                df_as_dict,  # type: ignore
+                df_as_dict,
                 products_id,
                 field,
                 field_frequencies,
@@ -500,15 +549,17 @@ class TestDeduplicateMethods:
                 False,
             )
 
-        assert deduplicated_product == {
+        expected_result = {
             'unspsc': 'Curing agents',
             'root_domain': 'harebueng.co.za',
             'brand': 'Nutrena',
         }
 
+        assert deduplicated_product == expected_result
+
     @staticmethod
     def test_frequency_is_updated_after_deduplication() -> None:
-        """Test that the most frequent values are chosen for every field of MERGE_BY_MOST_FREQUENT"""
+        """Test that frequencies are updated after merging"""
         deduplicated_product, _, products_id, df_as_dict, df, frequencies = (
             TestDeduplicateMethods.prepare_data_before_deduplication()
         )
@@ -518,7 +569,7 @@ class TestDeduplicateMethods:
             field_frequencies = frequencies.get(field, {})
 
             Controller.merge_by_the_most_frequent_value(
-                df_as_dict,  # type: ignore
+                df_as_dict,
                 products_id,
                 field,
                 field_frequencies,
@@ -527,14 +578,16 @@ class TestDeduplicateMethods:
             )
 
         frequencies_as_dict = {k: dict(v) for k, v in frequencies.items()}
-        assert frequencies_as_dict == {
+        expected_result = {
             'unspsc': {'Pipe connectors': 1, 'Curing agents': 2},
             'root_domain': {'studio-atcoat.com': 1, 'harebueng.co.za': 2},
             'brand': {'DeRoyal': 1, 'Nutrena': 2},
         }
 
+        assert frequencies_as_dict == expected_result
+
     @staticmethod
-    def test_deduplication_update():
+    def test_deduplication_update() -> None:
         """
         Test that after deduplication, products with the same product_identifier
         are removed and replaced with a single deduplicated product.
@@ -546,44 +599,3 @@ class TestDeduplicateMethods:
         deduplicated_products = list(df_as_dict.keys())
         assert len(initial_products) == len(deduplicated_products) + 1
         assert 10275 not in deduplicated_products
-
-
-class TestHelperMethods:
-    """Tests for helper methods"""
-
-    @staticmethod
-    def test_frequency_count() -> None:
-        """Test compute_frequency method"""
-        df = pd.DataFrame.from_dict(constants.SAMPLE_PRODUCTS, orient='index')
-        frequencies: dict[str, dict[str, int]] = defaultdict(dict)
-        for field in MERGE_BY_LEAST_FREQUENT + MERGE_BY_MOST_FREQUENT:
-            frequencies[field] = Controller.compute_frequency(df, field)
-
-        frequencies_as_dict = {k: dict(v) for k, v in frequencies.items()}
-        assert frequencies_as_dict == constants.COMPUTE_FREQUENCIES_RESULT
-
-    @staticmethod
-    def test_product_identifier_to_pid():
-        """Test get_id_to_product_identifier_mapping method"""
-        df = pd.read_parquet(SAMPLE_FILE_PATH)
-        Controller.add_additional_columns(df)
-        Controller.normalize_fields(df)
-
-        product_identifier_to_pid = Controller.get_id_to_product_identifier_mapping(df)
-        assert product_identifier_to_pid == constants.ID_TO_PRODUCT_IDENTIFIER_MAPPING
-
-    @staticmethod
-    def test_assign_ids():
-        """Test assigning ids"""
-        df_as_dict: dict = constants.SAMPLE_PRODUCTS
-        Controller.assign_ids(df_as_dict)
-        assert all(k == v.get(COLUMNS.ID.value) for k, v in df_as_dict.items())
-
-    @staticmethod
-    def test_filter_products_by_product_id():
-        """Test filtering products by specific product_id works"""
-        product_identifier = 'CAS: 137-26-8'
-        products_id = Controller.filter_products_by_product_id(
-            constants.ID_TO_PRODUCT_IDENTIFIER_MAPPING, product_identifier
-        )
-        assert products_id == [9971, 10275]

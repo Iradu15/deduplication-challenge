@@ -392,7 +392,10 @@ class Controller:
 
     @staticmethod
     def aggregate_energy_efficiency(values: list[tuple]) -> set:
-        """Aggregate energy_efficiency into intervals min-max type for each standard_label and qualitative feature"""
+        """
+        Aggregate energy_efficiency into intervals min-max type for each standard_label and qualitative feature
+        In case there are no available values for min / max, they will be assigned -1
+        """
         result = {}
 
         for item in values:

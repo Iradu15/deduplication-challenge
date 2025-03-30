@@ -1,54 +1,3 @@
-PRODUCTS_WITH_SAME_IDENTIFIER = {
-    'unspsc': {9971: 'Curing agents', 10275: 'Curing agents'},
-    'root_domain': {9971: 'harebueng.co.za', 10275: 'harebueng.co.za'},
-    'page_url': {
-        9971: 'https://www.harebueng.co.za/antiscorching-pvi-antiscorching-pvi-suppliers-poland.html',
-        10275: 'https://www.harebueng.co.za/rubber-accelerator-tmtd-ippd-in-pakistan.html',
-    },
-    'product_title': {9971: 'TMTD (Tetramethylthiuram Disulfide)', 10275: 'Rubber Accelerator TMTD IPPD'},
-    'product_summary': {
-        9971: 'TMTD (Tetramethylthiuram Disulfide) is a highly effective accelerator used primarily in rubber processing, particularly for low-temperature cures. It is also widely applicable as a fungicide and seed soaking agent in agriculture. The chemical name for TMTD is Tetramethyl thiuram disulfide, with a molecular formula of C6H12N2S4 and a molecular weight of 240.41. It has a purity of ≥96% and is identified by the CAS number 137-26-8 and EINECS number 205-286-2. TMTD is a general-purpose accelerator for both natural and synthetic rubbers, especially those of the IIR and CR types. It can be used as a single accelerator, as a secondary accelerator, or as a sulfur donor in most sulfur-cured elastomers. The product is known for its fast vulcanization rate, high maximum torque (Tmax), and excellent mechanical properties such as hardness, 300% modulus, tensile strength, and elongation. TMTD is compatible with natural and synthetic rubber and latex, making it a versatile choice for various rubber processing applications. It is also used in continuous vulcanization processes. The product is supplied in a white powder form and has an initial melting point of at least 142.0°C, with a heating loss percentage of ≤ 0.40%. TMTD is a sulfur donor, enhancing the vulcanization process by providing a fast cure rate and high mechanical properties. It is suitable for use in both natural and synthetic rubber and latex, making it a reliable choice for various industrial applications.',
-        10275: 'Rubber Accelerator TMTD IPPD, also known as Tetramethylthiuram Disulfide, is a highly effective ultra-accelerator widely used in rubber processing. It is primarily utilized in low-temperature cures, either alone or as an activator for other accelerators, particularly thiazoles. This product is available in a white or light gray powder or granule form with a density of 1.29. It is soluble in benzene, acetone, chloroform, CS2, and partially soluble in alcohol, diethyl ether, and CCl4, but insoluble in water, gasoline, and alkali with lower concentrations. TMTD IPPD is identified by the CAS number 137-26-8 and adheres to the HG/T 2334-2007 standard. It is commonly used as a single accelerator, secondary accelerator, or as a sulfur donor in most sulfur-cured elastomers, providing fast cure rates and scorchy properties. It is particularly effective in NBR, EPDM, and other rubber elastomers or blends, and is often required to be combined with zinc oxide and a fatty acid for effective use. The product is manufactured in Pakistan and is known for its high purity, with a minimum purity of 96%. It is widely used in the rubber industry for its ability to retard CR and act as an effective accelerator for low-temperature cures.',
-    },
-    'product_name': {9971: 'TMTD', 10275: 'Rubber Accelerator TMTD IPPD'},
-    'product_identifier': {9971: 'CAS: 137-26-8', 10275: 'CAS: 137-26-8'},
-    'brand': {9971: None, 10275: None},
-    'intended_industries': {9971: 'Rubber Processing,Agriculture', 10275: 'Rubber Industry'},
-    'applicability': {9971: 'Rubber Processing,Fungicide,Seed Soaking', 10275: 'Rubber Processing'},
-    'eco_friendly': {9971: None, 10275: None},
-    'ethical_and_sustainability_practices': {9971: (), 10275: ()},
-    'production_capacity': {9971: (), 10275: ()},
-    'price': {9971: (), 10275: ()},
-    'materials': {9971: (), 10275: ()},
-    'ingredients': {9971: (), 10275: ()},
-    'manufacturing_countries': {9971: (), 10275: 'PK'},
-    'manufacturing_year': {9971: -1, 10275: -1},
-    'manufacturing_type': {9971: (), 10275: ()},
-    'customization': {9971: (), 10275: ()},
-    'packaging_type': {9971: (), 10275: ()},
-    'form': {9971: 'Powder', 10275: 'Powder,Granules'},
-    'size': {9971: (), 10275: ()},
-    'color': {9971: (), 10275: ()},
-    'purity': {
-        9971: "{'qualitative': False, 'type': 'exact', 'unit': None, 'value': '96.0'}",
-        10275: "{'qualitative': False, 'type': 'exact', 'unit': None, 'value': '96.0'},{'qualitative': True, 'type': 'exact', 'unit': None, 'value': 'high'}",
-    },
-    'energy_efficiency': {9971: None, 10275: None},
-    'pressure_rating': {9971: (), 10275: ()},
-    'power_rating': {9971: (), 10275: ()},
-    'quality_standards_and_certifications': {9971: (), 10275: 'HG/T 2334-2007'},
-    'miscellaneous_features': {
-        9971: 'Initial Melting Point: At least 142.0°C,Heating Loss Percentage: ≤ 0.40%',
-        10275: 'Solubility in benzene, acetone, chloroform, CS2, and partially soluble in alcohol, diethyl ether, and CCl4,Insoluble in water, gasoline, and alkali with lower concentrations',
-    },
-    'description': {
-        9971: '"TMTD" is a highly effective accelerator used in rubber processing, particularly for low-temperature cures, and serves as a fungicide and seed soaking agent in agriculture. It is compatible with both natural and synthetic rubbers, including IIR and CR types, and is used as a single accelerator, secondary accelerator, or sulfur donor in sulfur-cured elastomers. The product is known for its fast vulcanization rate and excellent mechanical properties, making it a versatile choice for various rubber processing applications.',
-        10275: '"Rubber Accelerator TMTD IPPD" is a highly effective ultra-accelerator used in the rubber processing industry, particularly in low-temperature cures. It is soluble in various organic solvents and insoluble in water and most alkanes, ensuring its effectiveness in specific rubber types such as NBR and EPDM. Manufactured in Pakistan, this product adheres to the HG/T 2334-2007 standard and is known for its high purity, with a minimum purity of 96%.',
-    },
-    'id': {9971: 9972, 10275: 10276},
-    'base_root_domain': {9971: 'harebueng', 10275: 'harebueng'},
-}
-
 """
 These are modified examples for test purposes.
 Values where chosen in accordance to existing categories:
@@ -56,6 +5,7 @@ Values where chosen in accordance to existing categories:
 Example:
     - for each field from MERGE_BY_MOST_FREQUENT, values where chosen such that the most frequent would be merged
 """
+
 SAMPLE_PRODUCTS = {
     5554: {
         'unspsc': 'Pipe connectors',
