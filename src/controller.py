@@ -1,3 +1,5 @@
+from copy import deepcopy
+from math import inf as INF
 from typing import Any
 from collections.abc import Hashable
 from settings import COLUMNS, LIST_OF_DICT
@@ -18,19 +20,18 @@ class Controller:
     @staticmethod
     def add_additional_columns(df: pd.DataFrame) -> None:
         """Add additional columns to the dataframe"""
-        # df[COLUMNS.BASE_ROOT_DOMAIN.value] = df[COLUMNS.ROOT_DOMAIN.value].str.split('.').str[0]
         df[COLUMNS.DETAILS.value] = df.apply(lambda _: {}, axis=1)
 
     @staticmethod
     def normalize_fields(df: pd.DataFrame) -> None:
         """
-        Make fields hashable
+        Convert fields to hashable types while maintaining consistency.
 
-        Every field of LIST_OF_DICT is converted from list[dict] to tuple[tuple]
-            - [{'original': 'Brown', 'simple': 'Blue'}] => (('original', 'Brown'), ('simple', 'Blue')))
-        ENERGY_EFFICIENCY is converted to tuple[tuple] also, but it has different initial format
-        ECO_FRIENDLY is converted to list
-        It is useful to have PRODUCT_IDENTIFIER as a string instead of tuple
+        - Converts every field in LIST_OF_DICT from `list[dict]` to `tuple[tuple]`.
+          Example: `[{'original': 'Brown', 'simple': 'Blue'}]` → `((('original', 'Brown'), ('simple', 'Blue')))`
+        - Converts ENERGY_EFFICIENCY to `tuple[tuple]` as well, though its initial format differs.
+        - Converts ECO_FRIENDLY to a list (no need for hashability, as all values are `-1`).
+        - Ensures PRODUCT_IDENTIFIER remains a string instead of a tuple for usability.
         """
         for field in df:
             df[field] = df[field].apply(lambda x: tuple(x) if isinstance(x, np.ndarray | list) else x)
@@ -53,15 +54,13 @@ class Controller:
         )
 
     @staticmethod
-    def get_id_to_product_identifier_mapping(df: pd.DataFrame) -> dict[str | tuple, int]:
+    def get_id_to_product_identifier_mapping(df: pd.DataFrame) -> dict[int, str | tuple]:
         """
-        Obtain product_identifier to product id (value of the row from the dataset) mapping
-        Example:
-        15: 'sport wear'
-        30: 'clothing'
+        Obtain product id (value of the row from the dataset) to product_identifier mapping
+        Example: {15: 'sport wear', 30: 'clothing'}
         """
         df_as_dict = df.to_dict()
-        mapping = df_as_dict[COLUMNS.PRODUCT_IDENTIFIER.value]
+        mapping: dict[int, str | tuple] = deepcopy(df_as_dict[COLUMNS.PRODUCT_IDENTIFIER.value])
         del df_as_dict
 
         return mapping
@@ -70,27 +69,27 @@ class Controller:
     def filter_products_by_product_id(
         product_identifier_to_product: dict[int, str | tuple], product_identifier: str | tuple
     ) -> list[int]:
-        """Get product ids that have 'product_identifier' equal to a specific value"""
+        """Retrieve product IDs where 'product_identifier' matches a specific value"""
         return [k for k, v in product_identifier_to_product.items() if v == product_identifier]
 
     @staticmethod
     def update_frequencies(field_values: list[Any], frequencies: dict, deduplicated_value: str) -> None:
         """
-        All values are decremented, but the most / least frequent one is incremented because of the new merged product.
+        All values are decremented, but the most & least frequent one is incremented because of the new merged product.
         Remove keys with empty values
         """
         for value in field_values:
             frequencies[value] -= 1
         frequencies[deduplicated_value] += 1
 
-        frequencies_keys = tuple(frequencies)
+        frequencies_keys = list(frequencies.keys())
         for key in frequencies_keys:
             if not frequencies[key]:
                 frequencies.pop(key)
 
     @staticmethod
     def compute_frequency(df: pd.DataFrame, field: str) -> dict[str, int]:
-        """Compute frequency for all values of a field"""
+        """Compute frequencies (number of occurrences) for all values of a field"""
         frequency = defaultdict(int)
         for value in list(df[field]):
             frequency[value] += 1
@@ -118,11 +117,11 @@ class Controller:
     @staticmethod
     def get_field_values_for_ids(
         df: dict[Hashable, Any],
-        ids: list[int],
+        products_id: list[int],
         field: str,
     ) -> list[Any]:
         """Retrieve the values of a field for products with the specified IDs"""
-        return [df.get(id, {}).get(field) for id in ids]
+        return [df.get(id, {}).get(field) for id in products_id]
 
     @staticmethod
     def add_to_details(
@@ -133,17 +132,17 @@ class Controller:
         urls: set[str] = {''},
     ) -> None:
         """
-        Add additional value for 'field' to 'details' column
+        Add additional values for 'field' to the 'details' column.
+
         Example:
-        'details' column for a product =
+        The 'details' column for a product should look like:
         {
             'product_name': {'name1': {url1, url2}, 'name2': {url3}},
             'unspsc': {'unspsc1': {url2}, 'unspsc2': {url1, url3}},
-            'page_url' = {url1, url2}  # this is the special case
+            'page_url': {url1, url2}  # Special case: stores URLs directly
         }
 
-        'url_special_case' = True means it retains only the collection, not the mapping.
-        This applies to page_url, where we simply want to store all available URLs.
+        If 'url_special_case' is set to True, only the collection of URLs is retained, without the key-value mapping.
         """
         if not deduplicated_product.get(COLUMNS.DETAILS.value):
             deduplicated_product[COLUMNS.DETAILS.value] = defaultdict(dict)
@@ -216,6 +215,7 @@ class Controller:
 
         url_values = Controller.get_field_values_for_ids(df, products_id, COLUMNS.PAGE_URL.value)
         values_to_url_mapping = defaultdict(set)
+
         Controller.compute_values_to_url_mapping(field_values, url_values, values_to_url_mapping)
         Controller.add_to_details(field, values_to_url_mapping, deduplicated_product)
 
@@ -270,12 +270,11 @@ class Controller:
         Complete the values with unique elements
 
         Example:
-            - intended_industries1 = {A, B}
-            - intended_industries2 = {A, C}
-            - result = {A, B, C}
+            - intended_industries for product1 = {A, B}
+            - intended_industries for product2 = {A, C}
+            - intended_industries for deduplicated product = {A, B, C}
 
-        If 'add_to_details' = True it will add to 'details' column that there are multiple available values for this
-        specific field
+        If 'add_to_details' = True it will add to 'details' column all the available values for this specific field
         """
         field_values = Controller.get_field_values_for_ids(df, products_id, field)
 
@@ -292,7 +291,7 @@ class Controller:
         elif field in [COLUMNS.PURITY.value, COLUMNS.PRESSURE_RATING.value, COLUMNS.POWER_RATING.value]:
             complete_record = Controller.aggregate_purity_pressure_rating_power_rating(field_values)
         else:
-            complete_record = Controller.compute_complete_record(field_values)
+            complete_record = Controller.compute_general_complete_record(field_values)
 
         deduplicated_product[field] = complete_record
 
@@ -305,8 +304,8 @@ class Controller:
         Controller.add_to_details(field, values_to_url_mapping, deduplicated_product)
 
     @staticmethod
-    def compute_complete_record(values: list[Any]) -> set:
-        """Compute the complete value of a field containing all the combined values"""
+    def compute_general_complete_record(values: list[Any]) -> set:
+        """Compute the aggregated value of a field containing all the available values"""
         complete_record = set()
         for value in values:
             if isinstance(value, str | float | int | type(None)):
@@ -321,14 +320,14 @@ class Controller:
     def aggregate_purity_pressure_rating_power_rating(values: list[tuple]) -> set:
         """
         Aggregate purities & pressure_rating & power_rating (all 3 fields have the same structure)
-        into min-max intervals for each dimension and qualitative type.
+        into min-max intervals for each unit measure and qualitative type.
 
         Handles cases where the value is a literal (e.g., 'high') instead of a float using
-        `literal_value_keys` and `literal_value`. If a literal value is present and no numerical
+        `literal_keys` and `literal_value`. If a literal value is present and no numerical
         value exists for the same key, the literal value will be used.
         """
         result = {}
-        literal_value_keys = set()
+        literal_keys = set()
         literal_values = set()
 
         for item in values:
@@ -345,7 +344,7 @@ class Controller:
                 try:
                     value = float(value)
                 except ValueError:
-                    literal_value_keys.add(key)
+                    literal_keys.add(key)
                     literal_values.add(value)
                     continue
 
@@ -355,9 +354,8 @@ class Controller:
                     result[key]['min'] = min(result[key]['min'], value)
                     result[key]['max'] = max(result[key]['max'], value)
 
-        result.update({k: {'min': v, 'max': v} for k, v in zip(literal_value_keys, literal_values) if k not in result})
+        result.update({k: {'min': v, 'max': v} for k, v in zip(literal_keys, literal_values) if k not in result})
 
-        # Convert to the required output format
         aggregated = [
             (
                 ('qualitative', qualitative),
@@ -372,12 +370,13 @@ class Controller:
 
     @staticmethod
     def aggregate_color(values: list[tuple]) -> set:
-        """Aggregate sizes into intervals min-max type for each dimension and measure unit"""
+        """Aggregate sizes into intervals min-max type for each original color"""
         result = defaultdict(set)
 
         for item in values:
             if not item:
                 continue
+
             for entry in item:
                 original = next(v for k, v in entry if k == 'original')
                 simple = next(v for k, v in entry if k == 'simple')
@@ -403,33 +402,28 @@ class Controller:
             for entry in item:
                 qualitative: str = next(v for k, v in entry if k == 'qualitative')
                 standard_label: str = next(v for k, v in entry if k == 'standard_label')
-                try:
-                    value = float(next(v for k, v in entry if k == 'exact_percentage'))
-                except TypeError:
-                    value = -1.0
-                try:
-                    max_percentage = float(next(v for k, v in entry if k == 'max_percentage'))
-                except TypeError:
-                    max_percentage = max(-1.0, value)  # if there is at least one numerical value, take it instead of -1
-                try:
-                    min_percentage = float(next(v for k, v in entry if k == 'min_percentage'))
-                except TypeError:
-                    min_percentage = max(
-                        -1.0, max_percentage
-                    )  # if there is at least one numerical value, take it instead of -1
+
+                max_value = -1.0
+                min_value = INF
+                for field in ['exact_percentage', 'max_percentage', 'min_percentage']:
+                    try:
+                        value = float(next(v for k, v in entry if k == field))
+                        max_value = max(max_value, value)
+                        min_value = min(min_value, value)
+                    except TypeError:
+                        pass
 
                 key = (qualitative, standard_label)
 
                 if key not in result:
                     result[key] = {
-                        'min': min([max_percentage, min_percentage, value]),
-                        'max': max([max_percentage, min_percentage, value]),
+                        'min': min_value if min_value != INF else -1.0,
+                        'max': max_value,
                     }
                 else:
-                    result[key]['min'] = min([result[key]['min'], max_percentage, min_percentage, value])
-                    result[key]['max'] = max([result[key]['max'], max_percentage, min_percentage, value])
+                    result[key]['min'] = min(result[key]['min'], min_value if min_value != INF else -1.0)
+                    result[key]['max'] = max(result[key]['max'], max_value)
 
-        # Convert to the required output format
         aggregated = [
             (
                 ('qualitative', qualitative),
@@ -444,9 +438,15 @@ class Controller:
 
     @staticmethod
     def aggregate_size(values: list[tuple]) -> set:
-        """Aggregate sizes into intervals min-max type for each dimension and measure unit"""
+        """
+        Aggregate sizes into intervals min-max type for each dimension and measure unit
+        There are cases when value is literal instead of numerical, which are preferred
+        The literal ones are stored only for keys where numerical is not available
+
+        Aggregated as strings for converting back to parquet in the end
+        """
         result = {}
-        literal_value_keys = set()
+        literal_keys = set()
         literal_values = set()
 
         for item in values:
@@ -463,7 +463,7 @@ class Controller:
                 try:
                     value = float(value)
                 except ValueError:
-                    literal_value_keys.add(key)
+                    literal_keys.add(key)
                     literal_values.add(value)
                     continue
 
@@ -473,7 +473,7 @@ class Controller:
                     result[key]['min'] = min(result[key]['min'], value)
                     result[key]['max'] = max(result[key]['max'], value)
 
-        result.update({k: {'min': v, 'max': v} for k, v in zip(literal_value_keys, literal_values) if k not in result})
+        result.update({k: {'min': v, 'max': v} for k, v in zip(literal_keys, literal_values) if k not in result})
 
         # Convert to the required output format
         aggregated = [
@@ -512,8 +512,16 @@ class Controller:
 
     @staticmethod
     def aggregate_prices(values: list[tuple]) -> set:
-        """Aggregate prices into intervals min-max type for each currency"""
+        """
+        Aggregate prices into intervals min-max type for each currency
+        There are cases when value is literal instead of numerical, which are preferred
+        The literal ones are stored only for keys where numerical is not available
+
+        Aggregated as strings for converting back to parquet in the end
+        """
         result = {}
+        literal_keys = set()
+        literal_values = set()
 
         for product_tuple in values:
             if not product_tuple:
@@ -523,59 +531,56 @@ class Controller:
                 amount = next(v for k, v in items if k == 'amount')
                 currency = next(v for k, v in items if k == 'currency')
 
+                try:
+                    amount = float(amount)
+                except ValueError:
+                    literal_keys.add(currency)
+                    literal_values.add(amount)
+                    continue
+
                 if currency not in result:
                     result[currency] = {'min': amount, 'max': amount}
                 else:
                     result[currency]['min'] = min(result[currency]['min'], amount)
                     result[currency]['max'] = max(result[currency]['max'], amount)
 
+        result.update({k: {'min': v, 'max': v} for k, v in zip(literal_keys, literal_values) if k not in result})
+
         return set((('min', str(v['min'])), ('currency', k), ('max', str(v['max']))) for k, v in result.items())
 
     @staticmethod
     def convert_to_dataframe(df_as_dict: dict) -> pd.DataFrame:
         """
-        Undo normalization such that the dictionary can be converted back to parquet
-        Convert tuples to list and nested tuples to list of dictionaries
+        Revert normalization to restore close to the original structure for Parquet conversion.
+
+        - Converts tuples back to lists.
+        - Converts nested tuples into a list of dictionaries.
+        - Only fields in LIST_OF_DICT & ENERGY_EFFICIENCY need these 2 steps from above
+        - Converts PRODUCT_IDENTIFIER to string
+        - Converts MANUFACTURING_YEAR to list
+        - Converts any set to list
         """
         for id in list(df_as_dict.keys()):
             for field in LIST_OF_DICT + [COLUMNS.ENERGY_EFFICIENCY.value]:
-                value = df_as_dict[id].get(field)
-                if value is None:
+                values = df_as_dict[id].get(field)
+                if values is None:
                     continue
-                # print('before', value)
-                new_value = []
-                for tpl in value:
-                    v = {k: v for k, v in tpl}
-                    new_value.append(v)
 
-                df_as_dict[id][field] = new_value
-                # print('after', new_value)
+                values_as_list = [{k: v for k, v in value} for value in values]
+                df_as_dict[id][field] = values_as_list
 
-            if not df_as_dict[id][COLUMNS.DETAILS.value]:
+            if not df_as_dict[id].get(COLUMNS.DETAILS.value):
                 continue
 
-            for field in [
-                COLUMNS.PRODUCTION_CAPACITY.value,
-                COLUMNS.PRICE.value,
-                COLUMNS.SIZE.value,
-                COLUMNS.PURITY.value,
-                COLUMNS.PRESSURE_RATING.value,
-                COLUMNS.POWER_RATING.value,
-                COLUMNS.ENERGY_EFFICIENCY.value,
-                COLUMNS.COLOR.value,
-            ]:
-                value = df_as_dict[id][COLUMNS.DETAILS.value].get(field)
-                # print(f'before details {field} -  {value}')
-                if value is None:
+            for field in LIST_OF_DICT + [COLUMNS.ENERGY_EFFICIENCY.value]:
+                values = df_as_dict[id][COLUMNS.DETAILS.value].get(field)
+                if values is None:
                     continue
-                new_value = []
-                for tpl, urls in value.items():
-                    v = {k: v for k, v in tpl}
-                    v.update({COLUMNS.PAGE_URL.value: urls})
-                    new_value.append(v)
 
+                # Example of conversion:
+                #   - {(('a', 1), ('b', 2)): {'url1', 'url2'}} => [{'a': 1, 'b': 2, 'url': {'url2', 'url1'}}]
+                new_value = [{**dict(v), COLUMNS.PAGE_URL.value: urls} for v, urls in values.items()]
                 df_as_dict[id][COLUMNS.DETAILS.value][field] = new_value
-                # print('after details', new_value)
 
         df = pd.DataFrame.from_dict(df_as_dict, orient='index')
         df[COLUMNS.PRODUCT_IDENTIFIER.value] = df[COLUMNS.PRODUCT_IDENTIFIER.value].apply(

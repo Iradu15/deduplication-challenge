@@ -112,7 +112,7 @@ class TestDeduplicateMethods:
         ]
 
         expected_result = {None, 'Granules', 'Rubber Industry', 'Powder', 'Agriculture', 'Rubber Processing', -1}
-        assert Controller.compute_complete_record(field_values) == expected_result
+        assert Controller.compute_general_complete_record(field_values) == expected_result
 
     @staticmethod
     def test_aggregate_color() -> None:
@@ -219,7 +219,7 @@ class TestDeduplicateMethods:
         ]
 
         expected_result = {
-            (('min', '123'), ('currency', 'EUR'), ('max', '140')),
+            (('min', '123.0'), ('currency', 'EUR'), ('max', '140.0')),
             (('min', '1796.280029296875'), ('currency', 'AUD'), ('max', '1975.9100341796875')),
         }
 

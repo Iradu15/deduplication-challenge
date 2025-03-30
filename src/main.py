@@ -19,8 +19,8 @@ import sys
 
 def merge_group(df: dict[Hashable, Any], products_id: list[int], frequencies: dict[str, dict[str, int]]) -> None:
     """
-    Deduplicate a group of products with the same product_identifier
-    Remove the incomplete duplicates and add the merged complete product
+    Deduplicate a group of products with the same product_identifier by
+    removing incomplete duplicates and adding the merged complete product
     """
     deduplicated_product = {}
 
@@ -29,7 +29,10 @@ def merge_group(df: dict[Hashable, Any], products_id: list[int], frequencies: di
         # so they lack the reverse relationship in the 'details' column. It is created after this 'for' loop
         add_to_details = False if field in [COLUMNS.UNSPSC.value, COLUMNS.ROOT_DOMAIN.value] else True
 
-        if field in MERGE_BY_MOST_FREQUENT:
+        if field in MERGE_BY_COMPLETING:
+            Controller.merge_by_completing(df, products_id, field, deduplicated_product, add_to_details)
+
+        elif field in MERGE_BY_MOST_FREQUENT:
             field_frequencies = frequencies.get(field, {})
             Controller.merge_by_the_most_frequent_value(
                 df, products_id, field, field_frequencies, deduplicated_product, add_to_details
@@ -47,11 +50,8 @@ def merge_group(df: dict[Hashable, Any], products_id: list[int], frequencies: di
         elif field in MERGE_BY_LENGTHIEST_VALUE:
             Controller.merge_by_the_lengthiest_value(df, products_id, field, deduplicated_product)
 
-        elif field in MERGE_BY_COMPLETING:
-            Controller.merge_by_completing(df, products_id, field, deduplicated_product, add_to_details)
-
         elif field == COLUMNS.PAGE_URL.value:
-            new_root_domain: str = deduplicated_product.get(COLUMNS.ROOT_DOMAIN.value)  # type: ignore
+            new_root_domain: str = deduplicated_product.get(COLUMNS.ROOT_DOMAIN.value, '')
             Controller.merge_url(df, products_id, field, new_root_domain, deduplicated_product)
 
     for field in [COLUMNS.UNSPSC.value, COLUMNS.ROOT_DOMAIN.value]:
@@ -68,7 +68,6 @@ def merge_group(df: dict[Hashable, Any], products_id: list[int], frequencies: di
     # remove the duplicate products and add the merged & complete one
     for product_id in products_id:
         df.pop(product_id)
-
     df[deduplicated_product.get(COLUMNS.ID.value)] = deduplicated_product
 
 
@@ -79,16 +78,15 @@ def merge_by_product_identifier(
 ) -> None:
     """
     Group and merge products by 'product_identifier'.
-    Only non-empty 'product_identifier' values different from 'Not Available' are considered.
+    Only non-empty 'product_identifier' values different from 'SKU: Not Available' are considered.
     """
     product_identifier_values: set[str | tuple] = {
-        product_identifier for product_identifier in product_identifier_to_product.values() if product_identifier
+        product_identifier
+        for product_identifier in product_identifier_to_product.values()
+        if product_identifier and product_identifier != 'SKU: Not Available'
     }
 
     for product_identifier in product_identifier_values:
-        if not product_identifier or product_identifier == 'SKU: Not Available':
-            continue
-
         products_id = Controller.filter_products_by_product_id(product_identifier_to_product, product_identifier)
         # only interested in merging groups with at least 2 products
         if len(products_id) < 2:
@@ -99,7 +97,7 @@ def merge_by_product_identifier(
 
 def deduplicate(write_file: bool = False) -> None:
     """
-    Main method for merging product data.
+    Main method for deduplicating product data.
 
     Example for 'frequencies':
     {
@@ -123,7 +121,7 @@ def deduplicate(write_file: bool = False) -> None:
     Controller.assign_ids(df_as_dict)
     del df
 
-    merge_by_product_identifier(df_as_dict, product_identifier_to_pid, frequencies)  # type: ignore
+    merge_by_product_identifier(df_as_dict, product_identifier_to_pid, frequencies)
 
     if not write_file:
         return
@@ -138,6 +136,6 @@ if __name__ == '__main__':
         print(f'One or zero arguments expected, got {args_count - 1}')
         raise SystemExit(2)
 
-    write: bool = True if len(sys.argv) == 2 and sys.argv[1] == '-p' else False
+    write = True if len(sys.argv) == 2 and sys.argv[1] == '-p' else False
 
     deduplicate(write)
