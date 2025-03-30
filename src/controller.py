@@ -370,7 +370,7 @@ class Controller:
 
     @staticmethod
     def aggregate_color(values: list[tuple]) -> set:
-        """Aggregate sizes into intervals min-max type for each original color"""
+        """Aggregate color for each original color"""
         result = defaultdict(set)
 
         for item in values:
