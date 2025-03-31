@@ -10,6 +10,8 @@ from settings import FILE_PATH, COLUMNS
 class Helpers:
     """Used for initial queries and dataset exploring"""
 
+    COUNTER = 0
+
     @staticmethod
     def normalize_fields2(df: pd.DataFrame):
         """Make fields hashable & assign id for each product & complete BASE_ROOT_DOMAIN column"""
@@ -32,27 +34,48 @@ class Helpers:
     def get_consistent_fields(group: pd.DataFrame, f_value: str = '') -> set:
         """Get consistent fields in a group"""
         consistent_fields = set()
-        for field in group:
-            vals = group[field].unique()
+        # for field in group:
+        #     try:
+        #         vals = group[field].unique()
+        #     except Exception:
+        #         continue
 
-            # if len(vals) == 1 and vals[0] and vals[0] != -1:
-            if len(vals) == 1 and ((vals[0] and vals[0] != -1) or field == COLUMNS.PRODUCT_IDENTIFIER.value):
-                consistent_fields.add(field)
-            elif (
-                vals[0]
-                and vals[0] != -1
-                and vals[0] != [None]
-                and field
-                not in [
-                    COLUMNS.PRODUCT_SUMMARY.value,
-                    COLUMNS.MISCELLANEOUS_FEATURES.value,
-                    COLUMNS.DESCRIPTION.value,
-                ]
-            ):
-                print(f'field {field}: {group[field].unique()}')
+        #     # if len(vals) == 1 and vals[0] and vals[0] != -1:
+        #     if len(vals) == 1 and ((vals[0] and vals[0] != -1) or field == COLUMNS.PRODUCT_IDENTIFIER.value):
+        #         consistent_fields.add(field)
+        #     elif (
+        #         vals[0]
+        #         and vals[0] != -1
+        #         and vals[0] != [None]
+        #         and field
+        #         not in [
+        #             COLUMNS.PRODUCT_SUMMARY.value,
+        #             COLUMNS.MISCELLANEOUS_FEATURES.value,
+        #             COLUMNS.DESCRIPTION.value,
+        #         ]
+        #     ):
+        #         print(f'field {field}: {group[field].unique()}')
 
-        if consistent_fields:
-            print(f'Consistent fields:\n    *{"\n    *".join(f for f in consistent_fields)}\n')
+        if len(group[COLUMNS.PRODUCT_IDENTIFIER.value].unique()) > 1 :
+            return set()
+
+        # if consistent_fields:
+        group[COLUMNS.PRICE.value] = group[COLUMNS.PRICE.value].apply(
+            lambda x: list(x) if hasattr(x, '__iter__') and not isinstance(x, str) else x
+        )
+        print(
+            f'Consistent fields for '
+            f'{group[COLUMNS.PRODUCT_NAME.value].unique()} - '
+            f'{group[COLUMNS.PRODUCT_TITLE.value].unique()} - '
+            f'{group[COLUMNS.ROOT_DOMAIN.value].unique()} - '
+            f'{group[COLUMNS.UNSPSC.value].unique()} - '
+            f'{group[COLUMNS.BRAND.value].unique()} - '
+            f'{list(group[COLUMNS.PRICE.value].unique())} - '
+            f'{group[COLUMNS.PAGE_URL.value].unique()}:\n'
+            # f'    *{"\n    *".join(f for f in consistent_fields)}\n'
+        )
+
+        Helpers.COUNTER += 1
 
         return consistent_fields
 
@@ -111,7 +134,7 @@ class Helpers:
     def count_perfect_duplicates() -> None:
         """Count perfect duplicates"""
         df = pd.read_parquet(FILE_PATH)
-        df = Controller.normalize_fields(df)
+        df = Helpers.normalize_fields2(df)
 
         df = df.groupby(
             COLUMNS.UNSPSC.value,
@@ -131,7 +154,7 @@ class Helpers:
     @staticmethod
     def same_product_identifier() -> None:
         df = pd.read_parquet(FILE_PATH)
-        df = Controller.normalize_fields(df)
+        df = Helpers.normalize_fields2(df)
 
         groups = df.groupby(COLUMNS.PRODUCT_IDENTIFIER.value)
 
@@ -156,7 +179,7 @@ class Helpers:
     def consistent_fields_for_duplicate_product_identifiers():
         """Get which are the consistent fields for products with same product_identifiers'"""
         df = pd.read_parquet(FILE_PATH)
-        df = Controller.normalize_fields(df)
+        df = Helpers.normalize_fields2(df)
 
         grouped = df.groupby(COLUMNS.PRODUCT_IDENTIFIER.value)
         consistent_fields_across_all_groups = set({field.value for field in COLUMNS})
@@ -179,7 +202,7 @@ class Helpers:
         """Group dataset by field1 and order products by field2"""
         if df is None:
             df = pd.read_parquet(FILE_PATH)
-            df = Controller.normalize_fields(df)
+            df = Helpers.normalize_fields2(df)
 
         # Group and sort within each group
         grouped = df.groupby(field1, group_keys=True).apply(lambda x: x.sort_values(by=fields2))
@@ -210,7 +233,7 @@ class Helpers:
     @staticmethod
     def check_emtpy_product_identifier():
         df = pd.read_parquet(FILE_PATH)
-        df = Controller.normalize_fields(df)
+        df = Helpers.normalize_fields2(df)
         # df[COLUMNS.INTENDED_INDUSTRIES.value] = df[COLUMNS.INTENDED_INDUSTRIES.value].apply(
         #     lambda x: ','.join(s for s in x) if isinstance(x, tuple) else str(x)
         # )
@@ -224,7 +247,7 @@ class Helpers:
     def get_empty_product_identifier() -> pd.DataFrame:
         """Get what other fields are constant when product_identifier is empty and grouped by unspsc"""
         df = pd.read_parquet(FILE_PATH)
-        df = Controller.normalize_fields(df)
+        df = Helpers.normalize_fields2(df)
         # filter df for empty PRODUCT_IDENTIFIER
         df = df[
             df[COLUMNS.PRODUCT_IDENTIFIER.value].apply(
@@ -309,10 +332,13 @@ class Helpers:
     @staticmethod
     def empty_product_identifier_same_list_of_fields(fields: list[str]) -> None:
         df = Helpers.get_empty_product_identifier()
-        df = df.groupby(by=fields)
+        for field in [COLUMNS.SIZE.value, COLUMNS.PRICE.value, COLUMNS.COLOR.value]:
+            df[field] = df[field].apply(lambda x: str(list(x)) if isinstance(x, list | tuple) else x)
 
+        df = df.groupby(by=fields)
         freq = {}
-        consistent_fields_across_all_groups = set({field.value for field in COLUMNS})
+        Helpers.COUNTER = 0
+        consistent_fields_across_all_groups = set(Controller.get_all_fields())
         for *_, group in df:
             if len(group) <= 1 or any(not field or 'not available' in str(field).lower() for field in fields):
                 continue
@@ -326,10 +352,11 @@ class Helpers:
 
             consistent_fields_across_all_groups.intersection_update(aux)
 
-        if consistent_fields_across_all_groups:
-            print(
-                f'Consistent fields across all groups:\n    *{"\n    *".join(f for f in consistent_fields_across_all_groups)}\n'
-            )
+        # if consistent_fields_across_all_groups:
+        #     print(
+        #         f'Consistent fields across all groups:\n    *{"\n    *".join(f for f in consistent_fields_across_all_groups)}\n'
+        #     )
+        print('COUNTER', Helpers.COUNTER)
         for k, v in freq.items():
             print(k, '-', v)
 
@@ -340,7 +367,7 @@ class Helpers:
         in a given list of fields
         """
         df = pd.read_parquet(FILE_PATH)
-        df = Controller.normalize_fields(df)
+        df = Helpers.normalize_fields2(df)
         df = df.groupby(fields)
 
         freq = defaultdict(int)
@@ -472,3 +499,17 @@ class ReadParquetFile:
         parquet_file = pd.read_parquet(FILE_PATH)
         columns = parquet_file.info()
         print('columns', columns)
+
+
+if __name__ == '__main__':
+    Helpers.empty_product_identifier_same_list_of_fields(
+        [
+            COLUMNS.ROOT_DOMAIN.value,
+            COLUMNS.PRODUCT_NAME.value,
+            COLUMNS.PRODUCT_TITLE.value,
+            COLUMNS.UNSPSC.value,
+            COLUMNS.BRAND.value,
+            # COLUMNS.PRICE.value,
+            # COLUMNS.PAGE_URL.value
+        ]
+    )
