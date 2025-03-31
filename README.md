@@ -8,7 +8,8 @@ The objective is to consolidate duplicate product entries into a single, enriche
 You can find the details of the final solution and the reasoning behind it by following this: ["**google docs link**"](https://docs.google.com/document/d/1ohn_RBqLT6E_kC_uBGcCMtxU_58cizjHQRsRsCV3tcI/edit?usp=sharing).
 
 ## Prerequisites
-- run `python3.11 -m venv env`
+- install `python3.13`, works as well with `python3.11`.
+- run `python3.13 -m venv env`
 - go to `./env/bin/activate` script and overwrite the `PYTHONPATH`:
     - `export PYTHONPATH=~/veridion/src/`
 - activate env: `source env/bin/activate`
