@@ -2,9 +2,9 @@ from collections import defaultdict
 from collections.abc import Hashable
 from copy import deepcopy
 from math import inf as INF
-from typing import Any
 import numpy as np
 import pandas as pd
+from typing import Any
 
 
 from settings import COLUMNS, LIST_OF_DICT
@@ -107,7 +107,7 @@ class Controller:
         """
         Compute values_to_url_mapping needed as argument for add_to_details
         values_to_url_mapping stores values to url mapping:
-            - {'Sports Wear': url1, 'Athletic Shorts': url2}
+            - {'Sports Wear': {url1}, 'Athletic Shorts': {url2}}
         """
         for value, url in zip(field_values, url_values):
             values = [value] if isinstance(value, int | str | float | type(None)) else value

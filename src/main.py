@@ -1,8 +1,8 @@
 from collections import defaultdict
 from collections.abc import Hashable
+import pandas as pd
 import sys
 from typing import Any
-import pandas as pd
 
 
 from controller import Controller
