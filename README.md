@@ -17,4 +17,5 @@ You can find the details of the final solution and the reasoning behind it by fo
 
 ## Notes
 - run tests using `pytest` from `src/` directory
+- wait about `30 seconds` before opening the output file
 - `helper.py` contains scripts used at the beginning for dataset research and queries

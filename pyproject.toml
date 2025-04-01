@@ -11,7 +11,7 @@ lint.select = [
   "PL"
 ]
 
-target-version = "py311"
+target-version = "py313"
 
 lint.ignore = [
 "D100",
@@ -49,9 +49,3 @@ quote-style = "single"
 [testenv]
 deps = ["pytest", "pytest-cov"]
 commands = ["coverage run -m pytest", "coverage xml"]
-
-
-[coverage.run]
-relative_files = true
-source = "/Users/ionescuradu/facultate/veridion/src/"
-branch = true

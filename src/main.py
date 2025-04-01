@@ -1,3 +1,11 @@
+from collections import defaultdict
+from collections.abc import Hashable
+import pandas as pd
+import sys
+from typing import Any
+
+
+from controller import Controller
 from settings import (
     FILE_PATH,
     MERGE_BY_COMPLETING,
@@ -8,25 +16,19 @@ from settings import (
     MERGE_BY_LEAST_FREQUENT,
     OUTPUT_FILE,
 )
-from controller import Controller
-from typing import Any
-from collections.abc import Hashable
-import pandas as pd
-from collections import defaultdict
-
-import sys
 
 
 def merge_group(df: dict[Hashable, Any], products_id: list[int], frequencies: dict[str, dict[str, int]]) -> None:
     """
-    Deduplicate a group of products with the same product_identifier by
-    removing incomplete duplicates and adding the merged complete product
+    Deduplicate a group of products with the same product_identifier by removing incomplete duplicates and adding
+    the merged complete product.
+    Notes about 'details' field in google docs documentation.
     """
     deduplicated_product = {}
 
     for field in Controller.get_all_fields():
-        # 'unspsc' and 'root_domain' are computed before 'page_url',
-        # so they lack the reverse relationship in the 'details' column. It is created after this 'for' loop
+        # 'unspsc' and 'root_domain' are computed before 'page_url', so they lack the reverse relationship in the
+        # 'details' column. It is created after this 'for' loop
         add_to_details = False if field in [COLUMNS.UNSPSC.value, COLUMNS.ROOT_DOMAIN.value] else True
 
         if field in MERGE_BY_COMPLETING:
@@ -105,8 +107,10 @@ def deduplicate(write_file: bool = False) -> None:
         'unspsc': {'gardening': 4, 'sport wear': 7},
     }
 
-    'frequencies' is used during merging to select the most / least frequent value for some fields
+    'frequencies' is used during merging to select the most / least frequent value for specific fields
     """
+    print('Deduplication is starting')
+
     df = pd.read_parquet(FILE_PATH)
     Controller.add_additional_columns(df)
     Controller.normalize_fields(df)
@@ -139,3 +143,4 @@ if __name__ == '__main__':
     write = True if len(sys.argv) == 2 and sys.argv[1] == '-p' else False
 
     deduplicate(write)
+    print('Task finished')
