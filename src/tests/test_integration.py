@@ -2,8 +2,8 @@ from copy import deepcopy
 from collections import defaultdict
 import pandas as pd
 
+
 from controller import Controller
-import constants
 from main import merge_by_product_identifier
 from settings import (
     OUTPUT_TEST_FILE,
@@ -16,6 +16,7 @@ from settings import (
     FILE_PATH,
     COLUMNS,
 )
+from tests import constants
 
 
 class TestIntegration:

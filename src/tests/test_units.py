@@ -3,8 +3,8 @@ from collections import defaultdict
 import pandas as pd
 from typing import Literal
 
+
 from controller import Controller
-import constants
 from main import merge_group
 from settings import (
     MERGE_BY_LENGTHIEST_VALUE,
@@ -14,6 +14,7 @@ from settings import (
     SAMPLE_FILE_PATH,
     COLUMNS,
 )
+from tests import constants
 
 
 class TestHelperMethods:

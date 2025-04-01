@@ -43,8 +43,7 @@ class COLUMNS(Enum):
     MISCELLANEOUS_FEATURES = 'miscellaneous_features'
     DESCRIPTION = 'description'
     ID = 'id'  # added by myself
-    # BASE_ROOT_DOMAIN = 'base_root_domain'  # added by myself, needed to differentiate between domain.eu / domain.com
-    DETAILS = 'details'  # added by myself, needed to differentiate between domain.eu / domain.com
+    DETAILS = 'details'  # added by myself
 
 
 MERGE_BY_MOST_FREQUENT = [COLUMNS.UNSPSC.value, COLUMNS.ROOT_DOMAIN.value, COLUMNS.BRAND.value]
@@ -85,57 +84,3 @@ LIST_OF_DICT = [
     COLUMNS.PRESSURE_RATING.value,
     COLUMNS.POWER_RATING.value,
 ]
-
-
-duplicate_product_identifiers = (
-    'Part_Number: F1200B-V',
-    'UPC: 39026',
-    'SKU: CMP-CNVRT-HDMI2VGA-WHT-KIT',
-    'SKU: 1783FXDMIDL',
-    'Part_Number: F600BT-V,Part_Number: F600B-V,Part_Number: F600B4F-V,Part_Number: F1200B-V',
-    'CAS: 793-24-8',
-    'SKU: 1783SUDCOMK',
-    'SKU: 113129',
-    'Part_Number: IHB21K6',
-    'Part_Number: 40350',
-    'SKU: 1783TSYBLD',
-    'Part_Number: 56000',
-    'UPC: 123456789',
-    'Part_Number: ZKAD-C3M',
-    'Part_Number: 58773',
-    'Part_Number: 70154BKXS',
-    'Part_Number: 53007',
-    'Part_Number: F1600B',
-    'SKU: 109139',
-    'Part_Number: 52170',
-    'Part_Number: REU-01075',
-    'Part_Number: 52943',
-    'SKU: WP1540AW',
-    'Part_Number: 40149',
-    'Product_Code: BLD7714-SM',
-    'Part_Number: 66500',
-    'Part_Number: 52940',
-    'Part_Number: 95848',
-    'Part_Number: 90155',
-    'Part_Number: 30440',
-    'SKU: Not Available',
-    'Part_Number: 29790',
-    'Part_Number: FJ2150_NAVY',
-    'Part_Number: F3200S',
-    'Part_Number: 32767',
-    'Product_Code: B07H9H6SPN',
-    'SKU: 34246',
-    'Part_Number: IS410',
-    'Part_Number: F1200B,Part_Number: F1200BT,Part_Number: F1200B-V',
-    'Product_Code: IHB21K6',
-    'Part_Number: 53085',
-    'Part_Number: F600S,Part_Number: F600S4,Part_Number: F600S4F,Part_Number: F600SF',
-    'Product_Code: HT-B8110',
-    'SKU: BNDL-V0000-2X',
-    'Part_Number: REU-OADA-C16Z10-B770',
-    'Part_Number: 69622',
-    'Part_Number: REU-98707-2346',
-    'CAS: 137-26-8',
-    'Part_Number: 0986435505',
-    'Part_Number: HP108',
-)

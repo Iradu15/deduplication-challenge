@@ -1,11 +1,13 @@
+from collections import defaultdict
+from collections.abc import Hashable
 from copy import deepcopy
 from math import inf as INF
 from typing import Any
-from collections.abc import Hashable
-from settings import COLUMNS, LIST_OF_DICT
 import numpy as np
 import pandas as pd
-from collections import defaultdict
+
+
+from settings import COLUMNS, LIST_OF_DICT
 
 
 class Controller:
@@ -27,10 +29,10 @@ class Controller:
         """
         Convert fields to hashable types while maintaining consistency.
 
-        - Converts every field in LIST_OF_DICT from `list[dict]` to `tuple[tuple]`.
-          Example: `[{'original': 'Brown', 'simple': 'Blue'}]` → `((('original', 'Brown'), ('simple', 'Blue')))`
-        - Converts ENERGY_EFFICIENCY to `tuple[tuple]` as well, though its initial format differs.
-        - Converts ECO_FRIENDLY to a list (no need for hashability, as all values are `-1`).
+        - Converts every field in LIST_OF_DICT from list[dict] to tuple[tuple].
+          Example: [{'original': 'Brown', 'simple': 'Blue'}] -> ((('original', 'Brown'), ('simple', 'Blue')))
+        - Converts ENERGY_EFFICIENCY to tuple[tuple] as well, though its initial format differs.
+        - Converts ECO_FRIENDLY to a list (no need to be hashable, as all values are -1).
         - Ensures PRODUCT_IDENTIFIER remains a string instead of a tuple for usability.
         """
         for field in df:
@@ -57,7 +59,7 @@ class Controller:
     def get_id_to_product_identifier_mapping(df: pd.DataFrame) -> dict[int, str | tuple]:
         """
         Obtain product id (value of the row from the dataset) to product_identifier mapping
-        Example: {15: 'sport wear', 30: 'clothing'}
+        Example: {15: '70145EA2', 30: 'UNV10201'}
         """
         df_as_dict = df.to_dict()
         mapping: dict[int, str | tuple] = deepcopy(df_as_dict[COLUMNS.PRODUCT_IDENTIFIER.value])
@@ -69,13 +71,13 @@ class Controller:
     def filter_products_by_product_id(
         product_identifier_to_product: dict[int, str | tuple], product_identifier: str | tuple
     ) -> list[int]:
-        """Retrieve product IDs where 'product_identifier' matches a specific value"""
+        """Retrieve products ID where 'product_identifier' matches a specific value"""
         return [k for k, v in product_identifier_to_product.items() if v == product_identifier]
 
     @staticmethod
     def update_frequencies(field_values: list[Any], frequencies: dict, deduplicated_value: str) -> None:
         """
-        All values are decremented, but the most & least frequent one is incremented because of the new merged product.
+        All values are decremented, but the most or least frequent one is incremented because of the new merged product.
         Remove keys with empty values
         """
         for value in field_values:
@@ -102,7 +104,11 @@ class Controller:
         url_values: list[str],
         values_to_url_mapping: dict,
     ) -> None:
-        """Compute values_to_url_mapping needed as argument for add_to_details"""
+        """
+        Compute values_to_url_mapping needed as argument for add_to_details
+        values_to_url_mapping stores values to url mapping:
+            - {'Sports Wear': url1, 'Athletic Shorts': url2}
+        """
         for value, url in zip(field_values, url_values):
             values = [value] if isinstance(value, int | str | float | type(None)) else value
             filtered_values = [v for v in values if v is not None]
@@ -140,6 +146,7 @@ class Controller:
             'product_name': {'name1': {url1, url2}, 'name2': {url3}},
             'unspsc': {'unspsc1': {url2}, 'unspsc2': {url1, url3}},
             'page_url': {url1, url2}  # Special case: stores URLs directly
+            ...
         }
 
         If 'url_special_case' is set to True, only the collection of URLs is retained, without the key-value mapping.
@@ -169,7 +176,6 @@ class Controller:
     ) -> None:
         """
         Assign the most frequent value of a field from a group of products to the deduplicated product.
-
         If `add_to_details` is True, the other available values will be added to the `details` column.
 
         Example:
@@ -179,7 +185,7 @@ class Controller:
         Example:
             - A.root_domain = dom1
             - B.root_domain = dom2
-            => Result: root_domain = dom1, details = {'root_domain': ['dom2']}
+            => Result: root_domain = dom1, details = {'root_domain': 'dom1': {A.url}, 'dom2': {B.url}}
         """
         field_values = Controller.get_field_values_for_ids(df, products_id, field)
         most_frequent_value = max(field_values, key=lambda v: frequencies[v], default='')
@@ -268,6 +274,7 @@ class Controller:
     ) -> None:
         """
         Complete the values with unique elements
+        For certain fields, the logic differs, aggregating within min-max intervals for each specific key
 
         Example:
             - intended_industries for product1 = {A, B}
@@ -310,9 +317,8 @@ class Controller:
         for value in values:
             if isinstance(value, str | float | int | type(None)):
                 complete_record.add(value)
-                continue
-
-            complete_record.update(value)
+            else:
+                complete_record.update(value)
 
         return complete_record
 
@@ -322,9 +328,9 @@ class Controller:
         Aggregate purities & pressure_rating & power_rating (all 3 fields have the same structure)
         into min-max intervals for each unit measure and qualitative type.
 
-        Handles cases where the value is a literal (e.g., 'high') instead of a float using
-        `literal_keys` and `literal_value`. If a literal value is present and no numerical
-        value exists for the same key, the literal value will be used.
+        Handles cases where the value is a literal (e.g., 'high') instead of a float using `literal_keys` and
+        `literal_value`. If a literal value is present and no numerical value exists for the same key, the literal value
+        will be used.
         """
         result = {}
         literal_keys = set()
@@ -370,7 +376,7 @@ class Controller:
 
     @staticmethod
     def aggregate_color(values: list[tuple]) -> set:
-        """Aggregate color for each original color"""
+        """Aggregate sample colors for each original color"""
         result = defaultdict(set)
 
         for item in values:
@@ -383,7 +389,6 @@ class Controller:
 
                 result[original].add(simple)
 
-        # Convert to required output format
         aggregated = [
             (('original', original), ('simple', ', '.join(sorted(colors)))) for original, colors in result.items()
         ]
@@ -393,8 +398,8 @@ class Controller:
     @staticmethod
     def aggregate_energy_efficiency(values: list[tuple]) -> set:
         """
-        Aggregate energy_efficiency into intervals min-max type for each standard_label and qualitative feature
-        In case there are no available values for min / max, they will be assigned -1
+        Aggregate energy_efficiency into min-max intervals for each standard_label and qualitative feature
+        In case there are no available values for min & max, they will be assigned -1
         """
         result = {}
 
@@ -442,8 +447,8 @@ class Controller:
     @staticmethod
     def aggregate_size(values: list[tuple]) -> set:
         """
-        Aggregate sizes into intervals min-max type for each dimension and measure unit
-        There are cases when value is literal instead of numerical, which are preferred
+        Aggregate sizes into min-max intervals for each dimension and measure unit
+        There are cases when value is literal instead of numerical (which are preferred)
         The literal ones are stored only for keys where numerical is not available
 
         Aggregated as strings for converting back to parquet in the end
@@ -488,7 +493,7 @@ class Controller:
 
     @staticmethod
     def aggregate_production_capacity(values: list[tuple]) -> set:
-        """Aggregate production_capacity into intervals min-max type for each (time_frame, unit)"""
+        """Aggregate production_capacity into min-max intervals for each (time_frame, unit)"""
         result = {}
 
         for product_tuple in values:
@@ -516,8 +521,8 @@ class Controller:
     @staticmethod
     def aggregate_prices(values: list[tuple]) -> set:
         """
-        Aggregate prices into intervals min-max type for each currency
-        There are cases when value is literal instead of numerical, which are preferred
+        Aggregate prices into min-max intervals for each currency
+        There are cases when value is literal instead of numerical (which are preferred)
         The literal ones are stored only for keys where numerical is not available
 
         Aggregated as strings for converting back to parquet in the end
@@ -559,7 +564,7 @@ class Controller:
         - Converts tuples back to lists.
         - Converts nested tuples into a list of dictionaries.
         - Only fields in LIST_OF_DICT & ENERGY_EFFICIENCY need these 2 steps from above
-        - Converts PRODUCT_IDENTIFIER to string
+        - Converts PRODUCT_IDENTIFIER to string if tuple (all tuples are empty)
         - Converts MANUFACTURING_YEAR to list
         - Converts any set to list
         """
