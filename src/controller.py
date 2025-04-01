@@ -597,6 +597,8 @@ class Controller:
         df[COLUMNS.MANUFACTURING_YEAR.value] = df[COLUMNS.MANUFACTURING_YEAR.value].apply(
             lambda x: [x] if isinstance(x, int) else x
         )
+        df[COLUMNS.DETAILS.value] = df[COLUMNS.DETAILS.value].apply(lambda x: None if x == {} else x)
+
         for field in df:
             df[field] = df[field].apply(lambda x: list(x) if isinstance(x, set) else x)
 
