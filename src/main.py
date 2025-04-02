@@ -131,6 +131,7 @@ def deduplicate(write_file: bool = False) -> None:
         return
 
     df = Controller.convert_to_dataframe(df_as_dict)
+    StandardizeController.standardize_list_dict_fields(df)
     df.to_parquet(OUTPUT_FILE)
 
 
@@ -141,6 +142,6 @@ if __name__ == '__main__':
         raise SystemExit(2)
 
     write = True if len(sys.argv) == 2 and sys.argv[1] == '-p' else False
-
     deduplicate(write)
+
     print('Task finished')
