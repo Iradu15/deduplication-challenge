@@ -683,17 +683,15 @@ class StandardizeController:
     def standardize_details(row):
         """Standardize 'details' field to be JSON serializable."""
         if not row:
-            return []
+            return json.dumps({})
 
-        normalized_value = []
+        normalized_value = {}
         for k, v in row.items():
             if k == COLUMNS.PAGE_URL.value:
-                val = (k, list(v))
+                normalized_value[k] = list(v)
             elif k in LIST_OF_DICT + [COLUMNS.ENERGY_EFFICIENCY.value]:
-                val = (k, [json.dumps(item) for item in v])
+                normalized_value[k] = v
             else:
-                val = (k, json.dumps([(k2, json.dumps(list(v2))) for k2, v2 in v.items()]))
+                normalized_value[k] = {k2: list(v2) for k2, v2 in v.items()}
 
-            normalized_value.append(json.dumps(val))
-
-        return normalized_value
+        return json.dumps(normalized_value)
