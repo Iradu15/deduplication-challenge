@@ -602,22 +602,29 @@ class Controller:
         for field in df:
             df[field] = df[field].apply(lambda x: list(x) if isinstance(x, set) else x)
 
-        for field in [COLUMNS.PURITY.value, COLUMNS.PRESSURE_RATING.value, COLUMNS.POWER_RATING.value]:
-            df[field] = df[field].apply(StandardizeController.standardize_purity)
-        df[COLUMNS.PRICE.value] = df[COLUMNS.PRICE.value].apply(StandardizeController.standardize_price)
-        df[COLUMNS.SIZE.value] = df[COLUMNS.SIZE.value].apply(StandardizeController.standardize_size)
-        df[COLUMNS.ENERGY_EFFICIENCY.value] = df[COLUMNS.ENERGY_EFFICIENCY.value].apply(
-            StandardizeController.standardize_energy_efficiency
-        )
-        df[COLUMNS.PRODUCTION_CAPACITY.value] = df[COLUMNS.PRODUCTION_CAPACITY.value].apply(
-            StandardizeController.standardize_production_capacity
-        )
-
         return df
 
 
 class StandardizeController:
     """Class for standardizing various attributes to min-max intervals."""
+
+    @staticmethod
+    def standardize_list_dict_fields(df: pd.DataFrame) -> None:
+        """Standardize list[dict] fields because parquet automatically aggregates all fields"""
+        for field in [COLUMNS.PURITY.value, COLUMNS.PRESSURE_RATING.value, COLUMNS.POWER_RATING.value]:
+            df[field] = df[field].apply(StandardizeController.standardize_purity)
+
+        df[COLUMNS.PRICE.value] = df[COLUMNS.PRICE.value].apply(StandardizeController.standardize_price)
+
+        df[COLUMNS.SIZE.value] = df[COLUMNS.SIZE.value].apply(StandardizeController.standardize_size)
+
+        df[COLUMNS.ENERGY_EFFICIENCY.value] = df[COLUMNS.ENERGY_EFFICIENCY.value].apply(
+            StandardizeController.standardize_energy_efficiency
+        )
+
+        df[COLUMNS.PRODUCTION_CAPACITY.value] = df[COLUMNS.PRODUCTION_CAPACITY.value].apply(
+            StandardizeController.standardize_production_capacity
+        )
 
     @staticmethod
     def convert_to_min_max(row, value_key):

@@ -131,6 +131,7 @@ def deduplicate(write_file: bool = False) -> None:
         return
 
     df = Controller.convert_to_dataframe(df_as_dict)
+    StandardizeController.standardize_list_dict_fields(df)
     df.to_parquet(OUTPUT_FILE)
 
 
