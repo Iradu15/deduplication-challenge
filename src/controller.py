@@ -602,4 +602,68 @@ class Controller:
         for field in df:
             df[field] = df[field].apply(lambda x: list(x) if isinstance(x, set) else x)
 
+        for field in [COLUMNS.PURITY.value, COLUMNS.PRESSURE_RATING.value, COLUMNS.POWER_RATING.value]:
+            df[field] = df[field].apply(StandardizeController.standardize_purity)
+        df[COLUMNS.PRICE.value] = df[COLUMNS.PRICE.value].apply(StandardizeController.standardize_price)
+        df[COLUMNS.SIZE.value] = df[COLUMNS.SIZE.value].apply(StandardizeController.standardize_size)
+        df[COLUMNS.ENERGY_EFFICIENCY.value] = df[COLUMNS.ENERGY_EFFICIENCY.value].apply(
+            StandardizeController.standardize_energy_efficiency
+        )
+        df[COLUMNS.PRODUCTION_CAPACITY.value] = df[COLUMNS.PRODUCTION_CAPACITY.value].apply(
+            StandardizeController.standardize_production_capacity
+        )
+
         return df
+
+
+class StandardizeController:
+    """Class for standardizing various attributes to min-max intervals."""
+
+    @staticmethod
+    def convert_to_min_max(row, value_key):
+        """Helper function to convert a given key to min-max format."""
+        if not row or not isinstance(row, list):
+            return []
+
+        for item in row:
+            if item.get(value_key):
+                item['min'] = item['max'] = str(item.pop(value_key))
+                item.pop('type', None)
+
+        return row
+
+    @staticmethod
+    def standardize_purity(row):
+        """Standardize purity to min-max intervals."""
+        return StandardizeController.convert_to_min_max(row, 'value')
+
+    @staticmethod
+    def standardize_price(row):
+        """Standardize prices to min-max intervals."""
+        return StandardizeController.convert_to_min_max(row, 'amount')
+
+    @staticmethod
+    def standardize_size(row):
+        """Standardize sizes to min-max intervals."""
+        return StandardizeController.convert_to_min_max(row, 'value')
+
+    @staticmethod
+    def standardize_energy_efficiency(row):
+        """Standardize energy efficiency to min-max intervals."""
+        if not row or not isinstance(row, list):
+            return []
+
+        for item in row:
+            if any(item.get(field) for field in ['exact_percentage', 'max_percentage', 'min_percentage']):
+                item['min'] = str(item.get('min_percentage', item.get('exact_percentage', '-1')))
+                item['max'] = str(item.get('max_percentage', item.get('exact_percentage', '-1')))
+
+                for key in ['exact_percentage', 'min_percentage', 'max_percentage']:
+                    item.pop(key, None)
+
+        return row
+
+    @staticmethod
+    def standardize_production_capacity(row):
+        """Standardize production capacity to min-max intervals."""
+        return StandardizeController.convert_to_min_max(row, 'quantity')
