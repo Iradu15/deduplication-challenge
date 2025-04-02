@@ -5,7 +5,7 @@ import sys
 from typing import Any
 
 
-from controller import Controller
+from controller import Controller, StandardizeController
 from settings import (
     FILE_PATH,
     MERGE_BY_COMPLETING,
