@@ -1,6 +1,7 @@
 from collections import defaultdict
 from collections.abc import Hashable
 from copy import deepcopy
+import json
 from math import inf as INF
 import numpy as np
 import pandas as pd
@@ -586,8 +587,9 @@ class Controller:
                     continue
 
                 # Example of conversion:
-                #   - {(('a', 1), ('b', 2)): {'url1', 'url2'}} => [{'a': 1, 'b': 2, 'url': {'url2', 'url1'}}]
-                new_value = [{**dict(v), COLUMNS.PAGE_URL.value: urls} for v, urls in values.items()]
+                #   - used tuple because set is not JSON serializable
+                #   - {(('a', 1), ('b', 2)): ('url1', 'url2')} => [{'a': 1, 'b': 2, 'url': ('url2', 'url1')}]
+                new_value = [{**dict(v), COLUMNS.PAGE_URL.value: tuple(urls)} for v, urls in values.items()]
                 df_as_dict[id][COLUMNS.DETAILS.value][field] = new_value
 
         df = pd.DataFrame.from_dict(df_as_dict, orient='index')
@@ -625,6 +627,8 @@ class StandardizeController:
         df[COLUMNS.PRODUCTION_CAPACITY.value] = df[COLUMNS.PRODUCTION_CAPACITY.value].apply(
             StandardizeController.standardize_production_capacity
         )
+
+        df[COLUMNS.DETAILS.value] = df[COLUMNS.DETAILS.value].apply(StandardizeController.standardize_details)
 
     @staticmethod
     def convert_to_min_max(row, value_key):
@@ -674,3 +678,22 @@ class StandardizeController:
     def standardize_production_capacity(row):
         """Standardize production capacity to min-max intervals."""
         return StandardizeController.convert_to_min_max(row, 'quantity')
+
+    @staticmethod
+    def standardize_details(row):
+        """Standardize 'details' field to be JSON serializable."""
+        if not row:
+            return []
+
+        normalized_value = []
+        for k, v in row.items():
+            if k == COLUMNS.PAGE_URL.value:
+                val = (k, list(v))
+            elif k in LIST_OF_DICT + [COLUMNS.ENERGY_EFFICIENCY.value]:
+                val = (k, [json.dumps(item) for item in v])
+            else:
+                val = (k, json.dumps([(k2, json.dumps(list(v2))) for k2, v2 in v.items()]))
+
+            normalized_value.append(json.dumps(val))
+
+        return normalized_value
