@@ -8,7 +8,10 @@ from settings import FILE_PATH, COLUMNS
 
 
 class Helpers:
-    """Used for initial queries and dataset exploring"""
+    """
+    No longer in use. It remains here solely because it's part of the process; otherwise, it would have been removed.
+    Only used for initial queries and dataset exploration.
+    """
 
     @staticmethod
     def normalize_fields2(df: pd.DataFrame):
@@ -248,9 +251,6 @@ class Helpers:
 
         # Sort by the categorical order and fields2
         grouped = grouped.sort_values(by=[field, COLUMNS.UNSPSC.value])
-
-        # Keep only the relevant columns
-        grouped.to_excel('PULA2.xlsx', index=True)
 
         grouped = df.groupby(field)
 
