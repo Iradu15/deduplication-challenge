@@ -654,6 +654,35 @@ class TestStandardizationMethods:
         assert results == expected_result
 
     @staticmethod
+    def test_merge_purity_pressure_rating_power_rating_intervals():
+        """Test that merging purity_pressure_rating_power_rating intervals works as expected"""
+        initial_rows = [
+            [{'qualitative': False, 'unit': 'W', 'min': '95.0', 'max': '95.0'}],
+            [
+                {'qualitative': False, 'unit': 'kW', 'min': '0.37', 'max': '0.37'},
+                {'qualitative': False, 'unit': 'kW', 'min': '2.2', 'max': '2.2'},
+            ],
+            [
+                {'qualitative': False, 'unit': 'kW', 'min': '15.0', 'max': '15.0'},
+                {'qualitative': False, 'unit': 'Mhz', 'min': '22.0', 'max': '22.0'},
+            ],
+        ]
+
+        expected_result = [
+            [{'qualitative': False, 'unit': 'W', 'min': '95.0', 'max': '95.0'}],
+            [
+                {'qualitative': False, 'unit': 'kW', 'min': '0.37', 'max': '2.2'},
+            ],
+            [
+                {'qualitative': False, 'unit': 'kW', 'min': '15.0', 'max': '15.0'},
+                {'qualitative': False, 'unit': 'Mhz', 'min': '22.0', 'max': '22.0'},
+            ],
+        ]
+        results = [StandardizeController.standardize_purity_pressure_rating_power_rating(row) for row in initial_rows]
+
+        assert results == expected_result
+
+    @staticmethod
     def test_merge_size_intervals():
         """Test that merging size intervals works as expected"""
         initial_rows = [

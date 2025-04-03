@@ -657,7 +657,49 @@ class StandardizeController:
         Standardize purity, pressure_rating and power_rating to min-max intervals.
         All 3 fields have the same structure.
         """
-        return StandardizeController.convert_to_min_max(row, 'value')
+        row = StandardizeController.convert_to_min_max(row, 'value')
+
+        # merge intervals
+        result = {}
+        literal_keys = set()
+        literal_values = set()
+
+        for item in row:
+            if not item:
+                continue
+
+            qualitative = item.get('qualitative')
+            unit = item.get('unit')
+            min_v = item.get('min')
+            max_v = item.get('max')
+            key = (qualitative, unit)
+
+            try:
+                min_v = float(min_v)
+                max_v = float(max_v)
+            except ValueError:
+                literal_keys.add(key)
+                literal_values.add((min_v, max_v))
+                continue
+
+            if key not in result:
+                result[key] = {'min': min_v, 'max': max_v}
+            else:
+                result[key]['min'] = min(result[key]['min'], min_v)
+                result[key]['max'] = max(result[key]['max'], max_v)
+
+        result.update(
+            {
+                k: {'min': min_v, 'max': max_v}
+                for k, (min_v, max_v) in zip(literal_keys, literal_values)
+                if k not in result
+            }
+        )
+
+        return [
+            {'min': str(v['min']), 'max': str(v['max']), 'unit': unit, 'qualitative': qualitative}
+            for (qualitative, unit), v in result.items()
+        ]
 
     @staticmethod
     def standardize_price(row: Any) -> Any:
@@ -674,15 +716,18 @@ class StandardizeController:
                 continue
 
             currency = item.get('currency')
-            try:
-                min_v = float(item.get('min'))
-                max_v = float(item.get('max'))
-            except ValueError:
-                literal_keys.add(currency)
-                literal_values.add((min_v, max_v))
-                continue
+            min_v = item.get('min')
+            max_v = item.get('max')
 
             key = currency
+
+            try:
+                min_v = float(min_v)
+                max_v = float(max_v)
+            except ValueError:
+                literal_keys.add(key)
+                literal_values.add((min_v, max_v))
+                continue
 
             if key not in result:
                 result[key] = {'min': min_v, 'max': max_v}
