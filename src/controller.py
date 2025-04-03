@@ -612,7 +612,10 @@ class StandardizeController:
 
     @staticmethod
     def standardize_list_dict_fields(df: pd.DataFrame) -> None:
-        """Standardize list[dict] fields because parquet automatically aggregates all fields"""
+        """
+        Standardize list[dict] fields to keep consistent format because parquet automatically
+        aggregates all fields
+        """
         for field in [COLUMNS.PURITY.value, COLUMNS.PRESSURE_RATING.value, COLUMNS.POWER_RATING.value]:
             df[field] = df[field].apply(StandardizeController.standardize_purity_pressure_rating_power_rating)
 
@@ -659,7 +662,7 @@ class StandardizeController:
         """
         row = StandardizeController.convert_to_min_max(row, 'value')
 
-        # merge intervals
+        # merge intervals to avoid duplicate keys
         result = {}
         literal_keys = set()
         literal_values = set()
@@ -706,7 +709,7 @@ class StandardizeController:
         """Standardize prices to min-max intervals."""
         row = StandardizeController.convert_to_min_max(row, 'amount')
 
-        # merge intervals
+        # merge intervals to avoid duplicate keys
         result = {}
         literal_keys = set()
         literal_values = set()
@@ -750,7 +753,7 @@ class StandardizeController:
         """Standardize sizes to min-max intervals."""
         row = StandardizeController.convert_to_min_max(row, 'value')
 
-        # merge intervals
+        # merge intervals to avoid duplicate keys
         result = {}
         literal_keys = set()
         literal_values = set()
@@ -813,6 +816,7 @@ class StandardizeController:
         """Standardize production capacity to min-max intervals."""
         row = StandardizeController.convert_to_min_max(row, 'quantity')
 
+        # merge intervals to avoid duplicate keys
         result = {}
         for item in row:
             if not item:
