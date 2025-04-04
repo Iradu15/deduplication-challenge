@@ -11,3 +11,4 @@ tests/__pycache__/*
 src/dataset/deduplicated_test.parquet
 src/dataset/deduplicated_e2e_test.parquet
 src/dataset/deduplicated.parquet
+*~lock.*

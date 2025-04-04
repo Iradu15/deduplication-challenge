@@ -53,7 +53,7 @@ class Controller:
         )
 
         df[COLUMNS.PRODUCT_IDENTIFIER.value] = df[COLUMNS.PRODUCT_IDENTIFIER.value].apply(
-            lambda x: str(x[0]) if isinstance(x, tuple | list) and len(x) == 1 else x
+            lambda x: ''.join(x) if isinstance(x, tuple | list) and len(x) == 1 else x
         )
 
     @staticmethod
@@ -565,24 +565,24 @@ class Controller:
         - Converts tuples back to lists.
         - Converts nested tuples into a list of dictionaries.
         - Only fields in LIST_OF_DICT & ENERGY_EFFICIENCY need these 2 steps from above
-        - Converts PRODUCT_IDENTIFIER to string if tuple (all tuples are empty)
+        - Converts PRODUCT_IDENTIFIER to string if tuple
         - Converts MANUFACTURING_YEAR to list
         - Converts any set to list
         """
-        for id in list(df_as_dict.keys()):
+        for _, item in df_as_dict.items():
             for field in LIST_OF_DICT + [COLUMNS.ENERGY_EFFICIENCY.value]:
-                values = df_as_dict[id].get(field)
+                values = item.get(field)
                 if values is None:
                     continue
 
                 values_as_list = [{k: v for k, v in value} for value in values]
-                df_as_dict[id][field] = values_as_list
+                item[field] = values_as_list
 
-            if not df_as_dict[id].get(COLUMNS.DETAILS.value):
+            if not item.get(COLUMNS.DETAILS.value):
                 continue
 
             for field in LIST_OF_DICT + [COLUMNS.ENERGY_EFFICIENCY.value]:
-                values = df_as_dict[id][COLUMNS.DETAILS.value].get(field)
+                values = item[COLUMNS.DETAILS.value].get(field)
                 if values is None:
                     continue
 
@@ -590,11 +590,11 @@ class Controller:
                 #   - used tuple because set is not JSON serializable
                 #   - {(('a', 1), ('b', 2)): ('url1', 'url2')} => [{'a': 1, 'b': 2, 'url': ('url2', 'url1')}]
                 new_value = [{**dict(v), COLUMNS.PAGE_URL.value: tuple(urls)} for v, urls in values.items()]
-                df_as_dict[id][COLUMNS.DETAILS.value][field] = new_value
+                item[COLUMNS.DETAILS.value][field] = new_value
 
         df = pd.DataFrame.from_dict(df_as_dict, orient='index')
         df[COLUMNS.PRODUCT_IDENTIFIER.value] = df[COLUMNS.PRODUCT_IDENTIFIER.value].apply(
-            lambda x: '' if isinstance(x, tuple) else x
+            lambda x: ''.join(x) if isinstance(x, tuple) else x
         )
         df[COLUMNS.MANUFACTURING_YEAR.value] = df[COLUMNS.MANUFACTURING_YEAR.value].apply(
             lambda x: [x] if isinstance(x, int) else x
@@ -608,13 +608,16 @@ class Controller:
 
 
 class StandardizeController:
-    """Class for standardizing various attributes to min-max intervals."""
+    """Class for standardizing 'details' feature and various attributes to min-max intervals"""
 
     @staticmethod
     def standardize_list_dict_fields(df: pd.DataFrame) -> None:
-        """Standardize list[dict] fields because parquet automatically aggregates all fields"""
+        """
+        Convert list[dict] fields to min-max interval constant format because parquet automatically
+        aggregates all fields
+        """
         for field in [COLUMNS.PURITY.value, COLUMNS.PRESSURE_RATING.value, COLUMNS.POWER_RATING.value]:
-            df[field] = df[field].apply(StandardizeController.standardize_purity)
+            df[field] = df[field].apply(StandardizeController.standardize_purity_pressure_rating_power_rating)
 
         df[COLUMNS.PRICE.value] = df[COLUMNS.PRICE.value].apply(StandardizeController.standardize_price)
 
@@ -631,8 +634,76 @@ class StandardizeController:
         df[COLUMNS.DETAILS.value] = df[COLUMNS.DETAILS.value].apply(StandardizeController.standardize_details)
 
     @staticmethod
-    def convert_to_min_max(row, value_key):
-        """Helper function to convert a given key to min-max format."""
+    def merge_min_max_intervals(row: Any, key_composed_fields: list[str]) -> Any:
+        """
+        Merge min-max intervals for each key in the list of dictionaries.
+        Treat cases where the value is a literal (eg 'high') instead of a float using `literal_keys` & 'literal_values'
+
+        Example:
+            - for price, key is composed of 'currency'
+            - [{'min': 1, 'max': 5, 'currency': 'USD'}, {'min': 2, 'max': 6, 'currency': "USD"}] =>
+              [{'min': 1, 'max': 6, 'currency': 'USD'}]
+        """
+        result = {}
+        literal_keys = set()
+        literal_values = set()
+
+        for item in row:
+            if not item:
+                continue
+
+            key_as_list = []
+            for key in key_composed_fields:
+                key_value = item.get(key)
+                key_as_list.append(key_value)
+
+            min_v = item.get('min')
+            max_v = item.get('max')
+
+            key = tuple(key_as_list)
+
+            try:
+                min_v = float(min_v)
+                max_v = float(max_v)
+            except ValueError:
+                literal_keys.add(key)
+                literal_values.add((min_v, max_v))
+                continue
+
+            if key not in result:
+                result[key] = {'min': min_v, 'max': max_v}
+            else:
+                result[key]['min'] = min(result[key]['min'], min_v)
+                result[key]['max'] = max(result[key]['max'], max_v)
+
+        result.update(
+            {
+                k: {'min': min_v, 'max': max_v}
+                for k, (min_v, max_v) in zip(literal_keys, literal_values)
+                if k not in result
+            }
+        )
+
+        return [
+            {
+                'min': str(v['min']),
+                'max': str(v['max']),
+                **{key_k: key_v for key_k, key_v in zip(key_composed_fields, key)},
+            }
+            for key, v in result.items()
+        ]
+
+    @staticmethod
+    def convert_to_min_max(row: Any, value_key: str) -> Any:
+        """
+        Helper function to convert a given key to min-max format for consistency.
+
+        Example:
+            Initial format:
+            - [{'amount': '12.3', 'type': 'exact', 'qualitative': 'True', 'unit': 'None'}]
+            Consistent format:
+            - [{'min': '12.3', 'max': '12.3', 'qualitative': 'True', 'unit': 'None'}]
+        """
         if not row or not isinstance(row, list):
             return []
 
@@ -644,28 +715,34 @@ class StandardizeController:
         return row
 
     @staticmethod
-    def standardize_purity(row):
-        """Standardize purity to min-max intervals."""
-        return StandardizeController.convert_to_min_max(row, 'value')
+    def standardize_purity_pressure_rating_power_rating(row: Any) -> Any:
+        """
+        Standardize purity, pressure_rating and power_rating to min-max intervals.
+        All 3 fields have the same structure.
+        """
+        row = StandardizeController.convert_to_min_max(row, 'value')
+        return StandardizeController.merge_min_max_intervals(row, ['qualitative', 'unit'])
 
     @staticmethod
-    def standardize_price(row):
+    def standardize_price(row: Any) -> Any:
         """Standardize prices to min-max intervals."""
-        return StandardizeController.convert_to_min_max(row, 'amount')
+        row = StandardizeController.convert_to_min_max(row, 'amount')
+        return StandardizeController.merge_min_max_intervals(row, ['currency'])
 
     @staticmethod
-    def standardize_size(row):
+    def standardize_size(row: Any) -> Any:
         """Standardize sizes to min-max intervals."""
-        return StandardizeController.convert_to_min_max(row, 'value')
+        row = StandardizeController.convert_to_min_max(row, 'value')
+        return StandardizeController.merge_min_max_intervals(row, ['dimension', 'unit'])
 
     @staticmethod
-    def standardize_energy_efficiency(row):
+    def standardize_energy_efficiency(row: Any) -> Any:
         """Standardize energy efficiency to min-max intervals."""
         if not row or not isinstance(row, list):
             return []
 
         for item in row:
-            if any(item.get(field) for field in ['exact_percentage', 'max_percentage', 'min_percentage']):
+            if any(field in item for field in ['exact_percentage', 'max_percentage', 'min_percentage']):
                 item['min'] = str(item.get('min_percentage', item.get('exact_percentage', '-1')))
                 item['max'] = str(item.get('max_percentage', item.get('exact_percentage', '-1')))
 
@@ -675,13 +752,14 @@ class StandardizeController:
         return row
 
     @staticmethod
-    def standardize_production_capacity(row):
+    def standardize_production_capacity(row: Any) -> Any:
         """Standardize production capacity to min-max intervals."""
-        return StandardizeController.convert_to_min_max(row, 'quantity')
+        row = StandardizeController.convert_to_min_max(row, 'quantity')
+        return StandardizeController.merge_min_max_intervals(row, ['time_frame', 'unit'])
 
     @staticmethod
-    def standardize_details(row):
-        """Standardize 'details' field to be JSON serializable."""
+    def standardize_details(row: Any) -> json:
+        """Serialize 'details' field to JSON because parquet automatically aggregates all keys for a field."""
         if not row:
             return json.dumps({})
 

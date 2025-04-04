@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Literal
 
 
-from controller import Controller
+from controller import Controller, StandardizeController
 from main import merge_group
 from settings import (
     MERGE_BY_LENGTHIEST_VALUE,
@@ -600,3 +600,115 @@ class TestDeduplicateMethods:
         deduplicated_products = list(df_as_dict.keys())
         assert len(initial_products) == len(deduplicated_products) + 1
         assert 10275 not in deduplicated_products
+
+
+class TestStandardizationMethods:
+    """Test methods used for standardization, used for converting dataframe back to parquet"""
+
+    @staticmethod
+    def test_merge_price_intervals():
+        """Test that merging price intervals works as expected"""
+        initial_rows = [
+            [
+                {'currency': 'USD', 'min': '26.989999771118164', 'max': '26.989999771118164'},
+                {'currency': 'USD', 'min': '44.9900016784668', 'max': '44.9900016784668'},
+            ],
+            [
+                {'currency': 'USD', 'min': '26.989999771118164', 'max': '26.989999771118164'},
+            ],
+            [
+                {'currency': 'USD', 'min': '26.989999771118164', 'max': '26.989999771118164'},
+                {'currency': 'EUR', 'min': '44.9900016784668', 'max': '54.9900016784668'},
+            ],
+        ]
+
+        expected_result = [
+            [{'min': '26.989999771118164', 'max': '44.9900016784668', 'currency': 'USD'}],
+            [{'min': '26.989999771118164', 'max': '26.989999771118164', 'currency': 'USD'}],
+            [
+                {'min': '26.989999771118164', 'max': '26.989999771118164', 'currency': 'USD'},
+                {'min': '44.9900016784668', 'max': '54.9900016784668', 'currency': 'EUR'},
+            ],
+        ]
+        results = [StandardizeController.standardize_price(row) for row in initial_rows]
+
+        assert results == expected_result
+
+    @staticmethod
+    def test_merge_production_capacity_intervals():
+        """Test that merging production_capacity intervals works as expected"""
+        initial_rows = [
+            [{'min': '5000000.0', 'max': '5000000.0', 'unit': 'Units', 'time_frame': 'Month'}],
+            [
+                {'time_frame': 'Year', 'unit': 'Tons', 'min': '60', 'max': '60'},
+                {'time_frame': 'Year', 'unit': 'Tons', 'min': '70', 'max': '70'},
+            ],
+        ]
+
+        expected_result = [
+            [{'min': '5000000.0', 'max': '5000000.0', 'unit': 'Units', 'time_frame': 'Month'}],
+            [{'min': '60.0', 'max': '70.0', 'unit': 'Tons', 'time_frame': 'Year'}],
+        ]
+        results = [StandardizeController.standardize_production_capacity(row) for row in initial_rows]
+
+        assert results == expected_result
+
+    @staticmethod
+    def test_merge_purity_pressure_rating_power_rating_intervals():
+        """Test that merging purity_pressure_rating_power_rating intervals works as expected"""
+        initial_rows = [
+            [{'qualitative': False, 'unit': 'W', 'min': '95.0', 'max': '95.0'}],
+            [
+                {'qualitative': False, 'unit': 'kW', 'min': '0.37', 'max': '0.37'},
+                {'qualitative': False, 'unit': 'kW', 'min': '2.2', 'max': '2.2'},
+            ],
+            [
+                {'qualitative': False, 'unit': 'kW', 'min': '15.0', 'max': '15.0'},
+                {'qualitative': False, 'unit': 'Mhz', 'min': '22.0', 'max': '22.0'},
+            ],
+        ]
+
+        expected_result = [
+            [{'qualitative': False, 'unit': 'W', 'min': '95.0', 'max': '95.0'}],
+            [
+                {'qualitative': False, 'unit': 'kW', 'min': '0.37', 'max': '2.2'},
+            ],
+            [
+                {'qualitative': False, 'unit': 'kW', 'min': '15.0', 'max': '15.0'},
+                {'qualitative': False, 'unit': 'Mhz', 'min': '22.0', 'max': '22.0'},
+            ],
+        ]
+        results = [StandardizeController.standardize_purity_pressure_rating_power_rating(row) for row in initial_rows]
+
+        assert results == expected_result
+
+    @staticmethod
+    def test_merge_size_intervals():
+        """Test that merging size intervals works as expected"""
+        initial_rows = [
+            [
+                {'dimension': 'Length', 'unit': 'in', 'min': '3.5', 'max': '3.5'},
+                {'dimension': 'Width', 'unit': 'in', 'min': '2.25', 'max': '2.25'},
+            ],
+            [{'dimension': 'Volume', 'unit': 'gal', 'min': '1.0', 'max': '1.0'}],
+            [
+                {'dimension': 'Length', 'unit': 'in', 'min': '3.5', 'max': '3.5'},
+                {'dimension': 'Length', 'unit': 'inch', 'min': '12.25', 'max': '12.25'},
+                {'dimension': 'Length', 'unit': 'in', 'min': '5.25', 'max': '7.25'},
+            ],
+        ]
+
+        expected_result = [
+            [
+                {'dimension': 'Length', 'unit': 'in', 'min': '3.5', 'max': '3.5'},
+                {'dimension': 'Width', 'unit': 'in', 'min': '2.25', 'max': '2.25'},
+            ],
+            [{'dimension': 'Volume', 'unit': 'gal', 'min': '1.0', 'max': '1.0'}],
+            [
+                {'dimension': 'Length', 'unit': 'in', 'min': '3.5', 'max': '7.25'},
+                {'dimension': 'Length', 'unit': 'inch', 'min': '12.25', 'max': '12.25'},
+            ],
+        ]
+        results = [StandardizeController.standardize_size(row) for row in initial_rows]
+
+        assert results == expected_result
