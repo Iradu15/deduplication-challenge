@@ -623,11 +623,11 @@ class TestStandardizationMethods:
         ]
 
         expected_result = [
-            [{'min': 26.989999771118164, 'max': 44.9900016784668, 'currency': 'USD'}],
-            [{'min': 26.989999771118164, 'max': 26.989999771118164, 'currency': 'USD'}],
+            [{'min': '26.989999771118164', 'max': '44.9900016784668', 'currency': 'USD'}],
+            [{'min': '26.989999771118164', 'max': '26.989999771118164', 'currency': 'USD'}],
             [
-                {'min': 26.989999771118164, 'max': 26.989999771118164, 'currency': 'USD'},
-                {'min': 44.9900016784668, 'max': 54.9900016784668, 'currency': 'EUR'},
+                {'min': '26.989999771118164', 'max': '26.989999771118164', 'currency': 'USD'},
+                {'min': '44.9900016784668', 'max': '54.9900016784668', 'currency': 'EUR'},
             ],
         ]
         results = [StandardizeController.standardize_price(row) for row in initial_rows]
@@ -638,7 +638,7 @@ class TestStandardizationMethods:
     def test_merge_production_capacity_intervals():
         """Test that merging production_capacity intervals works as expected"""
         initial_rows = [
-            [{'min': 5000000.0, 'max': 5000000.0, 'unit': 'Units', 'time_frame': 'Month'}],
+            [{'min': '5000000.0', 'max': '5000000.0', 'unit': 'Units', 'time_frame': 'Month'}],
             [
                 {'time_frame': 'Year', 'unit': 'Tons', 'min': '60', 'max': '60'},
                 {'time_frame': 'Year', 'unit': 'Tons', 'min': '70', 'max': '70'},
@@ -646,8 +646,8 @@ class TestStandardizationMethods:
         ]
 
         expected_result = [
-            [{'min': 5000000.0, 'max': 5000000.0, 'unit': 'Units', 'time_frame': 'Month'}],
-            [{'min': 60.0, 'max': 70.0, 'unit': 'Tons', 'time_frame': 'Year'}],
+            [{'min': '5000000.0', 'max': '5000000.0', 'unit': 'Units', 'time_frame': 'Month'}],
+            [{'min': '60.0', 'max': '70.0', 'unit': 'Tons', 'time_frame': 'Year'}],
         ]
         results = [StandardizeController.standardize_production_capacity(row) for row in initial_rows]
 

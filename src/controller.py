@@ -613,7 +613,7 @@ class StandardizeController:
     @staticmethod
     def standardize_list_dict_fields(df: pd.DataFrame) -> None:
         """
-        Standardize list[dict] fields to keep consistent format because parquet automatically
+        Convert list[dict] fields to min-max interval constant format because parquet automatically
         aggregates all fields
         """
         for field in [COLUMNS.PURITY.value, COLUMNS.PRESSURE_RATING.value, COLUMNS.POWER_RATING.value]:
@@ -632,6 +632,66 @@ class StandardizeController:
         )
 
         df[COLUMNS.DETAILS.value] = df[COLUMNS.DETAILS.value].apply(StandardizeController.standardize_details)
+
+    @staticmethod
+    def merge_min_max_intervals(row: Any, key_composed_fields: list[str]) -> Any:
+        """
+        Merge min-max intervals for each key in the list of dictionaries.
+        Treat cases where the value is a literal (eg 'high') instead of a float using `literal_keys` & 'literal_values'
+
+        Example:
+            - for price, key is composed of 'currency'
+            - [{'min': 1, 'max': 5, 'currency': 'USD'}, {'min': 2, 'max': 6, 'currency': "USD"}] =>
+              [{'min': 1, 'max': 6, 'currency': 'USD'}]
+        """
+        result = {}
+        literal_keys = set()
+        literal_values = set()
+
+        for item in row:
+            if not item:
+                continue
+
+            key_as_list = []
+            for key in key_composed_fields:
+                key_value = item.get(key)
+                key_as_list.append(key_value)
+
+            min_v = item.get('min')
+            max_v = item.get('max')
+
+            key = tuple(key_as_list)
+
+            try:
+                min_v = float(min_v)
+                max_v = float(max_v)
+            except ValueError:
+                literal_keys.add(key)
+                literal_values.add((min_v, max_v))
+                continue
+
+            if key not in result:
+                result[key] = {'min': min_v, 'max': max_v}
+            else:
+                result[key]['min'] = min(result[key]['min'], min_v)
+                result[key]['max'] = max(result[key]['max'], max_v)
+
+        result.update(
+            {
+                k: {'min': min_v, 'max': max_v}
+                for k, (min_v, max_v) in zip(literal_keys, literal_values)
+                if k not in result
+            }
+        )
+
+        return [
+            {
+                'min': str(v['min']),
+                'max': str(v['max']),
+                **{key_k: key_v for key_k, key_v in zip(key_composed_fields, key)},
+            }
+            for key, v in result.items()
+        ]
 
     @staticmethod
     def convert_to_min_max(row: Any, value_key: str) -> Any:
@@ -661,139 +721,19 @@ class StandardizeController:
         All 3 fields have the same structure.
         """
         row = StandardizeController.convert_to_min_max(row, 'value')
-
-        # merge intervals to avoid duplicate keys
-        result = {}
-        literal_keys = set()
-        literal_values = set()
-
-        for item in row:
-            if not item:
-                continue
-
-            qualitative = item.get('qualitative')
-            unit = item.get('unit')
-            min_v = item.get('min')
-            max_v = item.get('max')
-            key = (qualitative, unit)
-
-            try:
-                min_v = float(min_v)
-                max_v = float(max_v)
-            except ValueError:
-                literal_keys.add(key)
-                literal_values.add((min_v, max_v))
-                continue
-
-            if key not in result:
-                result[key] = {'min': min_v, 'max': max_v}
-            else:
-                result[key]['min'] = min(result[key]['min'], min_v)
-                result[key]['max'] = max(result[key]['max'], max_v)
-
-        result.update(
-            {
-                k: {'min': min_v, 'max': max_v}
-                for k, (min_v, max_v) in zip(literal_keys, literal_values)
-                if k not in result
-            }
-        )
-
-        return [
-            {'min': str(v['min']), 'max': str(v['max']), 'unit': unit, 'qualitative': qualitative}
-            for (qualitative, unit), v in result.items()
-        ]
+        return StandardizeController.merge_min_max_intervals(row, ['qualitative', 'unit'])
 
     @staticmethod
     def standardize_price(row: Any) -> Any:
         """Standardize prices to min-max intervals."""
         row = StandardizeController.convert_to_min_max(row, 'amount')
-
-        # merge intervals to avoid duplicate keys
-        result = {}
-        literal_keys = set()
-        literal_values = set()
-
-        for item in row:
-            if not item:
-                continue
-
-            currency = item.get('currency')
-            min_v = item.get('min')
-            max_v = item.get('max')
-
-            key = currency
-
-            try:
-                min_v = float(min_v)
-                max_v = float(max_v)
-            except ValueError:
-                literal_keys.add(key)
-                literal_values.add((min_v, max_v))
-                continue
-
-            if key not in result:
-                result[key] = {'min': min_v, 'max': max_v}
-            else:
-                result[key]['min'] = min(result[key]['min'], min_v)
-                result[key]['max'] = max(result[key]['max'], max_v)
-
-        result.update(
-            {
-                k: {'min': min_v, 'max': max_v}
-                for k, (min_v, max_v) in zip(literal_keys, literal_values)
-                if k not in result
-            }
-        )
-
-        return [{'min': v['min'], 'max': v['max'], 'currency': currency} for currency, v in result.items()]
+        return StandardizeController.merge_min_max_intervals(row, ['currency'])
 
     @staticmethod
     def standardize_size(row: Any) -> Any:
         """Standardize sizes to min-max intervals."""
         row = StandardizeController.convert_to_min_max(row, 'value')
-
-        # merge intervals to avoid duplicate keys
-        result = {}
-        literal_keys = set()
-        literal_values = set()
-
-        for item in row:
-            if not item:
-                continue
-
-            dim = item.get('dimension')
-            unit = item.get('unit')
-            min_v = item.get('min')
-            max_v = item.get('max')
-            key = (dim, unit)
-
-            try:
-                min_v = float(min_v)
-                max_v = float(max_v)
-            except ValueError:
-                literal_keys.add(key)
-                literal_values.add((min_v, max_v))
-                continue
-
-            if key not in result:
-                result[key] = {'min': min_v, 'max': max_v}
-            else:
-                result[key]['min'] = min(result[key]['min'], min_v)
-                result[key]['max'] = max(result[key]['max'], max_v)
-
-        result.update(
-            {
-                k: {'min': min_v, 'max': max_v}
-                for k, (min_v, max_v) in zip(literal_keys, literal_values)
-                if k not in result
-            }
-        )
-
-        return [
-            {'min': str(v['min']), 'max': str(v['max']), 'unit': unit, 'dimension': dim}
-            for (dim, unit), v in result.items()
-        ]
+        return StandardizeController.merge_min_max_intervals(row, ['dimension', 'unit'])
 
     @staticmethod
     def standardize_energy_efficiency(row: Any) -> Any:
@@ -815,30 +755,7 @@ class StandardizeController:
     def standardize_production_capacity(row: Any) -> Any:
         """Standardize production capacity to min-max intervals."""
         row = StandardizeController.convert_to_min_max(row, 'quantity')
-
-        # merge intervals to avoid duplicate keys
-        result = {}
-        for item in row:
-            if not item:
-                continue
-
-            time_frame = item.get('time_frame')
-            unit = item.get('unit')
-            min_v = float(item.get('min'))
-            max_v = float(item.get('max'))
-
-            key = (time_frame, unit)
-
-            if key not in result:
-                result[key] = {'min': min_v, 'max': max_v}
-            else:
-                result[key]['min'] = min(result[key]['min'], min_v)
-                result[key]['max'] = max(result[key]['max'], max_v)
-
-        return [
-            {'min': v['min'], 'max': v['max'], 'unit': unit, 'time_frame': time_frame}
-            for (time_frame, unit), v in result.items()
-        ]
+        return StandardizeController.merge_min_max_intervals(row, ['time_frame', 'unit'])
 
     @staticmethod
     def standardize_details(row: Any) -> json:
