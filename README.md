@@ -11,7 +11,7 @@ You can find the details of the final solution and the reasoning behind it by fo
 - install `python3.13`, works as well with `python3.11`.
 - run `python3.13 -m venv env`
 - go to `./env/bin/activate` script and overwrite the `PYTHONPATH`:
-    - `export PYTHONPATH=~/veridion/src/`
+    - `export PYTHONPATH=~/deduplication-challenge/src/` (pwd to `src/`)
 - activate env: `source env/bin/activate`
 - run `pip instal -r requirements.txt`
 
