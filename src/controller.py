@@ -293,10 +293,6 @@ class Controller:
             complete_record = Controller.aggregate_into_min_max_intervals(field_values, ['currency'], 'amount')
         elif field == COLUMNS.SIZE.value:
             complete_record = Controller.aggregate_into_min_max_intervals(field_values, ['dimension', 'unit'], 'value')
-        elif field == COLUMNS.ENERGY_EFFICIENCY.value:
-            complete_record = Controller.aggregate_energy_efficiency(field_values)
-        elif field == COLUMNS.COLOR.value:
-            complete_record = Controller.aggregate_color(field_values)
         elif field == COLUMNS.PRODUCTION_CAPACITY.value:
             complete_record = Controller.aggregate_into_min_max_intervals(
                 field_values, ['time_frame', 'unit'], 'quantity'
@@ -305,6 +301,10 @@ class Controller:
             complete_record = Controller.aggregate_into_min_max_intervals(
                 field_values, ['qualitative', 'unit'], 'value'
             )
+        elif field == COLUMNS.ENERGY_EFFICIENCY.value:
+            complete_record = Controller.aggregate_energy_efficiency(field_values)
+        elif field == COLUMNS.COLOR.value:
+            complete_record = Controller.aggregate_color(field_values)
 
         else:
             complete_record = Controller.compute_general_complete_record(field_values)
@@ -406,7 +406,7 @@ class Controller:
         """
         Aggregate into min-max intervals for each key. There are cases when value is literal instead of numerical
         (which are preferred). The literal ones are stored only for keys where numerical is not available.
-        min & max are aggregated as strings for consistent format when converting back to parquet in the end
+        Min & max are aggregated as strings for consistent format when converting back to parquet in the end.
 
         Args:
             values: List of tuples containing the values to be aggregated.
@@ -414,8 +414,8 @@ class Controller:
             value_field: Field used for min-max aggregation.
         """
         result = {}
-        literal_keys = set()
-        literal_values = set()
+        literal_keys: list[str] = []
+        literal_values: list[Any] = []
 
         for product_tuple in values:
             if not product_tuple:
@@ -429,8 +429,8 @@ class Controller:
                 try:
                     value = float(value)
                 except ValueError:
-                    literal_keys.add(key)
-                    literal_values.add(value)
+                    literal_keys.append(key)
+                    literal_values.append(value)
                     continue
 
                 if key not in result:
@@ -439,6 +439,7 @@ class Controller:
                     result[key]['min'] = str(min(float(result[key]['min']), value))
                     result[key]['max'] = str(max(float(result[key]['max']), value))
 
+        # Add literal values to the result if respective keys are not present
         result.update(
             {k: {'min': str(v), 'max': str(v)} for k, v in zip(literal_keys, literal_values) if k not in result}
         )
