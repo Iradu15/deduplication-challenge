@@ -199,7 +199,10 @@ class TestDeduplicateMethods:
         expected_result = {
             (('qualitative', False), ('unit', None), ('min', '89.998'), ('max', '99.998')),
         }
-        assert Controller.aggregate_purity_pressure_rating_power_rating(field_values) == expected_result
+        assert (
+            Controller.aggregate_into_min_max_intervals(field_values, ['qualitative', 'unit'], 'value')
+            == expected_result
+        )
 
     @staticmethod
     def test_aggregate_purity_no_conflict() -> None:
@@ -223,7 +226,10 @@ class TestDeduplicateMethods:
             (('qualitative', False), ('unit', None), ('min', '89.998'), ('max', '99.998')),
         }
 
-        assert Controller.aggregate_purity_pressure_rating_power_rating(field_values) == expected_result
+        assert (
+            Controller.aggregate_into_min_max_intervals(field_values, ['qualitative', 'unit'], 'value')
+            == expected_result
+        )
 
     @staticmethod
     def test_aggregate_size() -> None:
@@ -248,7 +254,9 @@ class TestDeduplicateMethods:
             (('dimension', 'Width'), ('unit', 'in'), ('min', '16.9'), ('max', '16.9')),
         }
 
-        assert Controller.aggregate_size(field_values) == expected_result
+        assert (
+            Controller.aggregate_into_min_max_intervals(field_values, ['dimension', 'unit'], 'value') == expected_result
+        )
 
     @staticmethod
     def test_aggregate_prices() -> None:
@@ -272,7 +280,7 @@ class TestDeduplicateMethods:
             (('currency', 'AUD'), ('min', '1796.280029296875'), ('max', '1975.9100341796875')),
         }
 
-        assert Controller.aggregate_prices(field_values) == expected_result
+        assert Controller.aggregate_into_min_max_intervals(field_values, ['currency'], 'amount') == expected_result
 
     @staticmethod
     def test_aggregate_energy_efficiency() -> None:
@@ -326,7 +334,10 @@ class TestDeduplicateMethods:
             (('time_frame', 'Year'), ('unit', 'Units'), ('min', '400000000.0'), ('max', '400000000.0')),
         }
 
-        assert Controller.aggregate_production_capacity(field_values) == expected_result
+        assert (
+            Controller.aggregate_into_min_max_intervals(field_values, ['time_frame', 'unit'], 'quantity')
+            == expected_result
+        )
 
     @staticmethod
     def prepare_data_before_deduplication() -> tuple[

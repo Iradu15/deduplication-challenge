@@ -290,17 +290,22 @@ class Controller:
         field_values = Controller.get_field_values_for_ids(df, products_id, field)
 
         if field == COLUMNS.PRICE.value:
-            complete_record = Controller.aggregate_prices(field_values)
+            complete_record = Controller.aggregate_into_min_max_intervals(field_values, ['currency'], 'amount')
         elif field == COLUMNS.SIZE.value:
-            complete_record = Controller.aggregate_size(field_values)
+            complete_record = Controller.aggregate_into_min_max_intervals(field_values, ['dimension', 'unit'], 'value')
         elif field == COLUMNS.ENERGY_EFFICIENCY.value:
             complete_record = Controller.aggregate_energy_efficiency(field_values)
         elif field == COLUMNS.COLOR.value:
             complete_record = Controller.aggregate_color(field_values)
         elif field == COLUMNS.PRODUCTION_CAPACITY.value:
-            complete_record = Controller.aggregate_production_capacity(field_values)
+            complete_record = Controller.aggregate_into_min_max_intervals(
+                field_values, ['time_frame', 'unit'], 'quantity'
+            )
         elif field in [COLUMNS.PURITY.value, COLUMNS.PRESSURE_RATING.value, COLUMNS.POWER_RATING.value]:
-            complete_record = Controller.aggregate_purity_pressure_rating_power_rating(field_values)
+            complete_record = Controller.aggregate_into_min_max_intervals(
+                field_values, ['qualitative', 'unit'], 'value'
+            )
+
         else:
             complete_record = Controller.compute_general_complete_record(field_values)
 
@@ -327,19 +332,7 @@ class Controller:
         return complete_record
 
     @staticmethod
-    def aggregate_purity_pressure_rating_power_rating(values: list[tuple]) -> set:
-        """
-        Aggregate purities & pressure_rating & power_rating (all 3 fields have the same structure)
-        into min-max intervals for each unit measure and qualitative type.
-
-        Handles cases where the value is a literal (e.g., 'high') instead of a float using `literal_keys` and
-        `literal_value`. If a literal value is present and no numerical value exists for the same key, the literal value
-        will be used.
-        """
-        return Controller.aggregate_into_min_max_intervals(values, ['qualitative', 'unit'], 'value')
-
-    @staticmethod
-    def aggregate_color(values: list[tuple]) -> set:
+    def aggregate_color(values: list[tuple]) -> set[tuple]:
         """Aggregate sample colors for each original color"""
         result = defaultdict(set)
 
@@ -360,7 +353,7 @@ class Controller:
         return set(aggregated)
 
     @staticmethod
-    def aggregate_energy_efficiency(values: list[tuple]) -> set:
+    def aggregate_energy_efficiency(values: list[tuple]) -> set[tuple]:
         """
         Aggregate energy_efficiency into min-max intervals for each standard_label and qualitative feature
         In case there are no available values for min & max, they will be assigned -1
@@ -409,40 +402,16 @@ class Controller:
         return set(aggregated)
 
     @staticmethod
-    def aggregate_size(values: list[tuple]) -> set:
+    def aggregate_into_min_max_intervals(values: list[Any], key_fields: list[str], value_field: str) -> set[tuple]:
         """
-        Aggregate sizes into min-max intervals for each dimension and measure unit
-        There are cases when value is literal instead of numerical (which are preferred)
-        The literal ones are stored only for keys where numerical is not available
+        Aggregate into min-max intervals for each key. There are cases when value is literal instead of numerical
+        (which are preferred). The literal ones are stored only for keys where numerical is not available.
+        min & max are aggregated as strings for consistent format when converting back to parquet in the end
 
-        Aggregated as strings for consistent format when converting back to parquet in the end
-        """
-        return Controller.aggregate_into_min_max_intervals(values, ['dimension', 'unit'], 'value')
-
-    @staticmethod
-    def aggregate_production_capacity(values: list[tuple]) -> set:
-        """Aggregate production_capacity into min-max intervals for each (time_frame, unit)"""
-        return Controller.aggregate_into_min_max_intervals(values, ['time_frame', 'unit'], 'quantity')
-
-    @staticmethod
-    def aggregate_prices(values: list[tuple]) -> set[tuple]:
-        """
-        Aggregate prices into min-max intervals for each currency
-        There are cases when value is literal instead of numerical (which are preferred)
-        The literal ones are stored only for keys where numerical is not available
-
-        Aggregated as strings for consistent format when converting back to parquet in the end
-        """
-        return Controller.aggregate_into_min_max_intervals(values, ['currency'], 'amount')
-
-    @staticmethod
-    def aggregate_into_min_max_intervals(values: list[Any], key_fields: list[str], value_field: str):
-        """
-        Aggregate into min-max intervals for each key.
-        There are cases when value is literal instead of numerical (which are preferred). The literal ones are stored
-        only for keys where numerical is not available.
-
-        Aggregated as strings for consistent format when converting back to parquet in the end
+        Args:
+            values: List of tuples containing the values to be aggregated.
+            key_fields: List of fields used as keys for aggregation.
+            value_field: Field used for min-max aggregation.
         """
         result = {}
         literal_keys = set()
@@ -453,13 +422,9 @@ class Controller:
                 continue
 
             for items in product_tuple:
-                print('items', items)
                 key_fields_as_list = [next(v for k, v in items if k == key_field) for key_field in key_fields]
-                print('key_fields_as_list', key_fields_as_list)
                 key = tuple(key_fields_as_list)
-                print('key', key)
                 value = next(v for k, v in items if k == value_field)
-                print('value', value, '\n\n')
 
                 try:
                     value = float(value)
@@ -469,7 +434,6 @@ class Controller:
                     continue
 
                 if key not in result:
-                    print('key not in result', key)
                     result[key] = {'min': str(value), 'max': str(value)}
                 else:
                     result[key]['min'] = str(min(float(result[key]['min']), value))
