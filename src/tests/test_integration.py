@@ -385,10 +385,10 @@ class TestIntegration:
             'form': {'Powder', 'Granules'},
             'manufacturing_year': {-1},
             'production_capacity': {
-                (('min', '60.0'), ('time_frame', 'Year'), ('unit', 'Tons'), ('max', '70.0')),
-                (('min', '60000.0'), ('time_frame', 'Month'), ('unit', 'Units'), ('max', '60000.0')),
+                (('time_frame', 'Year'), ('unit', 'Tons'), ('min', '60.0'), ('max', '70.0')),
+                (('time_frame', 'Month'), ('unit', 'Units'), ('min', '60000.0'), ('max', '60000.0')),
             },
-            'price': {(('min', '1.809999942779541'), ('currency', 'USD'), ('max', '1.899999976158142'))},
+            'price': {(('currency', 'USD'), ('min', '1.809999942779541'), ('max', '1.899999976158142'))},
             'manufacturing_type': {'Turnkey'},
             'customization': {'Various colors available', 'Various types of grinding wheels available'},
             'packaging_type': {'Cartons'},

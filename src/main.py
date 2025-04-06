@@ -64,10 +64,10 @@ def merge_group(df: dict[Hashable, Any], products_id: list[int], frequencies: di
         Controller.compute_values_to_url_mapping(field_values, url_values, values_to_url_mapping)
         Controller.add_to_details(field, values_to_url_mapping, deduplicated_product)
 
-    # assign the product identifier
+    # assign the product identifier to the deduplicated product
     deduplicated_product[COLUMNS.PRODUCT_IDENTIFIER.value] = df[products_id[0]].get(COLUMNS.PRODUCT_IDENTIFIER.value)
 
-    # remove the duplicate products and add the merged & complete one
+    # remove duplicate products and add the merged & complete one
     for product_id in products_id:
         df.pop(product_id)
     df[deduplicated_product.get(COLUMNS.ID.value)] = deduplicated_product
@@ -75,14 +75,14 @@ def merge_group(df: dict[Hashable, Any], products_id: list[int], frequencies: di
 
 def merge_by_product_identifier(
     df: dict[Hashable, Any],
-    product_identifier_to_product: dict[int, str | tuple],
+    product_identifier_to_product: dict[int, str],
     frequencies: dict[str, dict[str, int]],
 ) -> None:
     """
     Group and merge products by 'product_identifier'.
-    Only non-empty 'product_identifier' values different from 'SKU: Not Available' are considered.
+    Only non-empty 'product_identifier' different from 'SKU: Not Available' are considered.
     """
-    product_identifier_values: set[str | tuple] = {
+    product_identifier_values: set[str] = {
         product_identifier
         for product_identifier in product_identifier_to_product.values()
         if product_identifier and product_identifier != 'SKU: Not Available'
@@ -106,7 +106,6 @@ def deduplicate(write_file: bool = False) -> None:
         'root_domain': {'root1': 15, 'root2': 2},
         'unspsc': {'gardening': 4, 'sport wear': 7},
     }
-
     'frequencies' is used during merging to select the most / least frequent value for specific fields
     """
     print('Deduplication is starting')

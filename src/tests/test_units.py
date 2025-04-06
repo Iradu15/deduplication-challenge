@@ -268,8 +268,8 @@ class TestDeduplicateMethods:
         ]
 
         expected_result = {
-            (('min', '123.0'), ('currency', 'EUR'), ('max', '140.0')),
-            (('min', '1796.280029296875'), ('currency', 'AUD'), ('max', '1975.9100341796875')),
+            (('currency', 'EUR'), ('min', '123.0'), ('max', '140.0')),
+            (('currency', 'AUD'), ('min', '1796.280029296875'), ('max', '1975.9100341796875')),
         }
 
         assert Controller.aggregate_prices(field_values) == expected_result
@@ -320,10 +320,10 @@ class TestDeduplicateMethods:
         ]
 
         expected_result = {
-            (('min', '60.0'), ('time_frame', 'Year'), ('unit', 'Tons'), ('max', '70.0')),
-            (('min', '1000.0'), ('time_frame', 'Day'), ('unit', 'Kilograms'), ('max', '1000.0')),
-            (('min', '60000.0'), ('time_frame', 'Month'), ('unit', 'Units'), ('max', '60000.0')),
-            (('min', '400000000.0'), ('time_frame', 'Year'), ('unit', 'Units'), ('max', '400000000.0')),
+            (('time_frame', 'Month'), ('unit', 'Units'), ('min', '60000.0'), ('max', '60000.0')),
+            (('time_frame', 'Day'), ('unit', 'Kilograms'), ('min', '1000.0'), ('max', '1000.0')),
+            (('time_frame', 'Year'), ('unit', 'Tons'), ('min', '60.0'), ('max', '70.0')),
+            (('time_frame', 'Year'), ('unit', 'Units'), ('min', '400000000.0'), ('max', '400000000.0')),
         }
 
         assert Controller.aggregate_production_capacity(field_values) == expected_result

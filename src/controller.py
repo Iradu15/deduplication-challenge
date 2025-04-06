@@ -29,6 +29,7 @@ class Controller:
     def normalize_fields(df: pd.DataFrame) -> None:
         """
         Convert fields to hashable types while maintaining consistency.
+        Certain fields need to be hashable for grouping products and storing them in a dictionary.
 
         - Converts every field in LIST_OF_DICT from list[dict] to tuple[tuple].
           Example: [{'original': 'Brown', 'simple': 'Blue'}] -> ((('original', 'Brown'), ('simple', 'Blue')))
@@ -53,24 +54,24 @@ class Controller:
         )
 
         df[COLUMNS.PRODUCT_IDENTIFIER.value] = df[COLUMNS.PRODUCT_IDENTIFIER.value].apply(
-            lambda x: ''.join(x) if isinstance(x, tuple | list) and len(x) == 1 else x
+            lambda x: ''.join(x) if isinstance(x, tuple | list) else x
         )
 
     @staticmethod
-    def get_id_to_product_identifier_mapping(df: pd.DataFrame) -> dict[int, str | tuple]:
+    def get_id_to_product_identifier_mapping(df: pd.DataFrame) -> dict[int, str]:
         """
         Obtain product id (value of the row from the dataset) to product_identifier mapping
         Example: {15: '70145EA2', 30: 'UNV10201'}
         """
         df_as_dict = df.to_dict()
-        mapping: dict[int, str | tuple] = deepcopy(df_as_dict[COLUMNS.PRODUCT_IDENTIFIER.value])
+        mapping: dict[int, str] = deepcopy(df_as_dict[COLUMNS.PRODUCT_IDENTIFIER.value])
         del df_as_dict
 
         return mapping
 
     @staticmethod
     def filter_products_by_product_id(
-        product_identifier_to_product: dict[int, str | tuple], product_identifier: str | tuple
+        product_identifier_to_product: dict[int, str], product_identifier: str
     ) -> list[int]:
         """Retrieve products ID where 'product_identifier' matches a specific value"""
         return [k for k, v in product_identifier_to_product.items() if v == product_identifier]
@@ -274,15 +275,17 @@ class Controller:
         add_to_details: bool = True,
     ) -> None:
         """
-        Complete the values with unique elements
-        For certain fields, the logic differs, aggregating within min-max intervals for each specific key
+        Completes the values with unique elements.
+        For specific fields (handled by independent `if` branches), values are aggregated within their respective
+        min-max intervals for each key. For all other fields, it simply appends all available options.
 
-        Example:
-            - intended_industries for product1 = {A, B}
-            - intended_industries for product2 = {A, C}
-            - intended_industries for deduplicated product = {A, B, C}
+        ### Example:
+        - `intended_industries` for `product1` = {A, B}
+        - `intended_industries` for `product2` = {A, C}
+        - `intended_industries` for the deduplicated product = {A, B, C}
 
-        If 'add_to_details' = True it will add to 'details' column all the available values for this specific field
+        If `add_to_details = True`, all available values for the specific field are added to the `details` column,
+        mapping each value to its corresponding URL.
         """
         field_values = Controller.get_field_values_for_ids(df, products_id, field)
 
@@ -333,47 +336,7 @@ class Controller:
         `literal_value`. If a literal value is present and no numerical value exists for the same key, the literal value
         will be used.
         """
-        result = {}
-        literal_keys = set()
-        literal_values = set()
-
-        for item in values:
-            if not item:
-                continue
-
-            for entry in item:
-                qualitative: str = next(v for k, v in entry if k == 'qualitative')
-                unit: str = next(v for k, v in entry if k == 'unit')
-                value = next(v for k, v in entry if k == 'value')
-
-                key = (qualitative, unit)
-
-                try:
-                    value = float(value)
-                except ValueError:
-                    literal_keys.add(key)
-                    literal_values.add(value)
-                    continue
-
-                if key not in result:
-                    result[key] = {'min': value, 'max': value}
-                else:
-                    result[key]['min'] = min(result[key]['min'], value)
-                    result[key]['max'] = max(result[key]['max'], value)
-
-        result.update({k: {'min': v, 'max': v} for k, v in zip(literal_keys, literal_values) if k not in result})
-
-        aggregated = [
-            (
-                ('qualitative', qualitative),
-                ('unit', unit),
-                ('min', str(values['min'])),
-                ('max', str(values['max'])),
-            )
-            for (qualitative, unit), values in result.items()
-        ]
-
-        return set(aggregated)
+        return Controller.aggregate_into_min_max_intervals(values, ['qualitative', 'unit'], 'value')
 
     @staticmethod
     def aggregate_color(values: list[tuple]) -> set:
@@ -452,22 +415,51 @@ class Controller:
         There are cases when value is literal instead of numerical (which are preferred)
         The literal ones are stored only for keys where numerical is not available
 
-        Aggregated as strings for converting back to parquet in the end
+        Aggregated as strings for consistent format when converting back to parquet in the end
+        """
+        return Controller.aggregate_into_min_max_intervals(values, ['dimension', 'unit'], 'value')
+
+    @staticmethod
+    def aggregate_production_capacity(values: list[tuple]) -> set:
+        """Aggregate production_capacity into min-max intervals for each (time_frame, unit)"""
+        return Controller.aggregate_into_min_max_intervals(values, ['time_frame', 'unit'], 'quantity')
+
+    @staticmethod
+    def aggregate_prices(values: list[tuple]) -> set[tuple]:
+        """
+        Aggregate prices into min-max intervals for each currency
+        There are cases when value is literal instead of numerical (which are preferred)
+        The literal ones are stored only for keys where numerical is not available
+
+        Aggregated as strings for consistent format when converting back to parquet in the end
+        """
+        return Controller.aggregate_into_min_max_intervals(values, ['currency'], 'amount')
+
+    @staticmethod
+    def aggregate_into_min_max_intervals(values: list[Any], key_fields: list[str], value_field: str):
+        """
+        Aggregate into min-max intervals for each key.
+        There are cases when value is literal instead of numerical (which are preferred). The literal ones are stored
+        only for keys where numerical is not available.
+
+        Aggregated as strings for consistent format when converting back to parquet in the end
         """
         result = {}
         literal_keys = set()
         literal_values = set()
 
-        for item in values:
-            if not item:
+        for product_tuple in values:
+            if not product_tuple:
                 continue
 
-            for entry in item:
-                dim: str = next(v for k, v in entry if k == 'dimension')
-                unit: str = next(v for k, v in entry if k == 'unit')
-                value = next(v for k, v in entry if k == 'value')
-
-                key = (dim, unit)
+            for items in product_tuple:
+                print('items', items)
+                key_fields_as_list = [next(v for k, v in items if k == key_field) for key_field in key_fields]
+                print('key_fields_as_list', key_fields_as_list)
+                key = tuple(key_fields_as_list)
+                print('key', key)
+                value = next(v for k, v in items if k == value_field)
+                print('value', value, '\n\n')
 
                 try:
                     value = float(value)
@@ -477,85 +469,20 @@ class Controller:
                     continue
 
                 if key not in result:
-                    result[key] = {'min': value, 'max': value}
+                    print('key not in result', key)
+                    result[key] = {'min': str(value), 'max': str(value)}
                 else:
-                    result[key]['min'] = min(result[key]['min'], value)
-                    result[key]['max'] = max(result[key]['max'], value)
+                    result[key]['min'] = str(min(float(result[key]['min']), value))
+                    result[key]['max'] = str(max(float(result[key]['max']), value))
 
-        result.update({k: {'min': v, 'max': v} for k, v in zip(literal_keys, literal_values) if k not in result})
-
-        # Convert to the required output format
-        aggregated = [
-            (('dimension', str(dim)), ('unit', str(unit)), ('min', str(values['min'])), ('max', str(values['max'])))
-            for (dim, unit), values in result.items()
-        ]
-
-        return set(aggregated)
-
-    @staticmethod
-    def aggregate_production_capacity(values: list[tuple]) -> set:
-        """Aggregate production_capacity into min-max intervals for each (time_frame, unit)"""
-        result = {}
-
-        for product_tuple in values:
-            if not product_tuple:
-                continue
-
-            for items in product_tuple:
-                time_frame = next(v for k, v in items if k == 'time_frame')
-                unit = next(v for k, v in items if k == 'unit')
-                quantity = float(next(v for k, v in items if k == 'quantity'))
-
-                key = (time_frame, unit)
-
-                if key not in result:
-                    result[key] = {'min': quantity, 'max': quantity}
-                else:
-                    result[key]['min'] = min(result[key]['min'], quantity)
-                    result[key]['max'] = max(result[key]['max'], quantity)
-
-        return set(
-            (('min', str(v['min'])), ('time_frame', time_frame), ('unit', str(unit)), ('max', str(v['max'])))
-            for (time_frame, unit), v in result.items()
+        result.update(
+            {k: {'min': str(v), 'max': str(v)} for k, v in zip(literal_keys, literal_values) if k not in result}
         )
 
-    @staticmethod
-    def aggregate_prices(values: list[tuple]) -> set:
-        """
-        Aggregate prices into min-max intervals for each currency
-        There are cases when value is literal instead of numerical (which are preferred)
-        The literal ones are stored only for keys where numerical is not available
+        keys_tuple = [tuple(zip(key_fields, r_k)) for r_k in result.keys()]
+        values_tuple = [tuple(v.items()) for v in list(result.values())]
 
-        Aggregated as strings for converting back to parquet in the end
-        """
-        result = {}
-        literal_keys = set()
-        literal_values = set()
-
-        for product_tuple in values:
-            if not product_tuple:
-                continue
-
-            for items in product_tuple:
-                amount = next(v for k, v in items if k == 'amount')
-                currency = next(v for k, v in items if k == 'currency')
-
-                try:
-                    amount = float(amount)
-                except ValueError:
-                    literal_keys.add(currency)
-                    literal_values.add(amount)
-                    continue
-
-                if currency not in result:
-                    result[currency] = {'min': amount, 'max': amount}
-                else:
-                    result[currency]['min'] = min(result[currency]['min'], amount)
-                    result[currency]['max'] = max(result[currency]['max'], amount)
-
-        result.update({k: {'min': v, 'max': v} for k, v in zip(literal_keys, literal_values) if k not in result})
-
-        return set((('min', str(v['min'])), ('currency', k), ('max', str(v['max']))) for k, v in result.items())
+        return {(*k, *v) for k, v in zip(keys_tuple, values_tuple)}
 
     @staticmethod
     def convert_to_dataframe(df_as_dict: dict) -> pd.DataFrame:
